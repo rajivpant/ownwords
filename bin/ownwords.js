@@ -375,7 +375,7 @@ function cmdBatch(options) {
   const outputDir = options.flags.outputdir || './content/articles';
 
   console.log('='.repeat(60));
-  console.log('Draftsmith Batch Conversion');
+  console.log('ownwords Batch Conversion');
   console.log('='.repeat(60));
   console.log(`  URLs: ${urls.length}`);
   console.log(`  Raw directory: ${rawDir}`);

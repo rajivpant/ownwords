@@ -216,6 +216,9 @@ ownwords can publish directly to WordPress using the REST API with Application P
 ownwords config-wp add myblog https://myblog.example.com --username=author
 # You'll be prompted for the Application Password
 
+# Add a site and set as default
+ownwords config-wp add myblog https://myblog.example.com --username=author --default
+
 # List configured sites
 ownwords config-wp list
 
