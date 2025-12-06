@@ -40,10 +40,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.1.0] - 2025-12-05
+
+### Changed
+
+- **HTML to Markdown conversion now uses Turndown library** - Replaced custom regex-based conversion with the battle-tested [Turndown](https://github.com/mixmark-io/turndown) library for more reliable and accurate HTML to Markdown conversion
+- Added GFM (GitHub Flavored Markdown) support via turndown-plugin-gfm for proper table rendering, strikethrough, and task lists
+
+### Fixed
+
+- **Title extraction** - Now correctly extracts article title from og:title or title tag, avoiding site logos/links
+- **Paragraph separation** - Content no longer collapses into single paragraphs
+- **Table conversion** - HTML tables now convert to proper Markdown tables instead of concatenated text
+- **Content boundary detection** - Improved detection of article end (excludes share buttons, footer, comments)
+- **HTML entity handling** - Better decoding of curly quotes, dashes, and other common entities
+
+### Added
+
+- Custom Turndown rules for WordPress block code handling
+- Support for code blocks with syntax highlighting hints
+
+---
+
 ## [Unreleased]
 
 ### Planned
 
+- **REST API fetch mode** - For your own WordPress sites, fetch content via REST API instead of scraping HTML. Benefits:
+  - Clean structured data (title, content, excerpt)
+  - Full metadata (categories, tags, author, custom fields)
+  - Bi-directional sync with tag/category normalization
+  - No HTML parsing needed
 - TypeScript type definitions
 - Plugin system for custom converters
 - Sync status tracking in front matter
