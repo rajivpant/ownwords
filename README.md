@@ -405,8 +405,19 @@ Contributions welcome! Please open an issue to discuss before submitting PRs.
 
 ## Author
 
-Rajiv Pant
+Rajiv Pant — [rajiv.com](https://rajiv.com)
 
 ---
 
-*This project was created to support the [Synthesis Coding](https://synthesiscoding.com) methodology.*
+## Built with Synthesis Coding
+
+This project was built using [**Synthesis Coding**](https://synthesiscoding.com/) — the hands-on craft of rigorous AI-assisted development. Synthesis Coding is the practical application of [**Synthesis Engineering**](https://synthesiscoding.com/), the broader discipline encompassing methodology, organizational practices, and systematic quality standards.
+
+Both guided development:
+- Human architectural decisions drove the design
+- AI assisted with implementation, testing, and documentation
+- Each feature was iteratively refined through human review
+
+The toolkit itself supports Synthesis Coding workflows by enabling human authors to maintain ownership of their content while using AI for batch editorial tasks.
+
+*Learn more at [synthesiscoding.com](https://synthesiscoding.com/)*
