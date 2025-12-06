@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Own your words. WordPress to Markdown conversion toolkit for human authors with AI-assisted editing.",
   "main": "lib/index.js",
+  "types": "types/index.d.ts",
   "bin": {
     "ownwords": "./bin/ownwords.js"
   },
@@ -39,8 +40,13 @@
   "files": [
     "bin/",
     "lib/",
+    "types/",
     "templates/",
     "README.md",
     "LICENSE"
-  ]
+  ],
+  "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1"
+  }
 }

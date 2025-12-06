@@ -18,6 +18,7 @@ This toolkit is for human authors who want to:
 - **Convert**: Transform HTML to clean Markdown with YAML front matter
 - **Verify**: Independent QA verification of conversion accuracy
 - **Export**: Convert Markdown back to WordPress-ready HTML
+- **Publish**: Push content directly to WordPress via REST API
 - **Agent API**: Batch operations for AI-assisted editorial tasks
 
 ## Installation
@@ -204,12 +205,109 @@ The verify command performs comprehensive QA:
 - `1` - Issues found (errors)
 - `2` - Warnings only
 
+## WordPress Publishing
+
+ownwords can publish directly to WordPress using the REST API with Application Passwords.
+
+### Configure WordPress Connection
+
+```bash
+# Add a WordPress site
+ownwords config-wp add myblog https://myblog.example.com --username=author
+# You'll be prompted for the Application Password
+
+# List configured sites
+ownwords config-wp list
+
+# Test connection
+ownwords config-wp test myblog
+```
+
+**Note:** You need to create an Application Password in WordPress (Users → Your Profile → Application Passwords).
+
+### Publish to WordPress
+
+```bash
+# Publish as draft (default)
+ownwords publish ./content/articles/my-article.md
+
+# Publish immediately
+ownwords publish ./content/articles/my-article.md --status=publish
+
+# Update existing post (finds by slug)
+ownwords publish ./content/articles/my-article.md --update
+
+# Publish to specific site
+ownwords publish ./content/articles/my-article.md --site=myblog
+
+# Dry run (preview without publishing)
+ownwords publish ./content/articles/my-article.md --dry-run
+```
+
+### Batch Publish
+
+```bash
+# Publish all markdown files in a directory
+ownwords publish-all ./content/articles/ --status=draft
+
+# Update all existing posts
+ownwords publish-all ./content/articles/ --update --status=publish
+```
+
+### Environment Variables
+
+For CI/CD environments, use environment variables instead of the config file:
+
+```bash
+export OWNWORDS_WP_SITE=https://myblog.example.com
+export OWNWORDS_WP_USERNAME=author
+export OWNWORDS_WP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+```
+
+### WordPress API in Code
+
+```javascript
+const { WpClient } = require('ownwords');
+
+const client = new WpClient({
+  url: 'https://myblog.example.com',
+  username: 'author',
+  appPassword: 'xxxx xxxx xxxx xxxx'
+});
+
+// Test connection
+const result = await client.testConnection();
+console.log(result.success ? 'Connected!' : result.error);
+
+// Publish markdown file
+const post = await client.publishMarkdown('./content/my-article.md', {
+  status: 'publish',
+  update: true  // Update if exists
+});
+console.log(`Published: ${post.link}`);
+
+// Create post directly
+const newPost = await client.createPost({
+  title: 'My Article',
+  content: '<p>Hello world</p>',
+  status: 'draft'
+});
+```
+
 ## Dual Publishing Workflow
 
+### Automated Workflow (Recommended)
+
 1. **Edit locally**: Modify markdown files with your preferred editor or AI assistant
+2. **Deploy static site**: Push changes to GitHub → Cloudflare Pages auto-deploys
+3. **Publish to WordPress**: `ownwords publish ./content/articles/my-article.md --update`
+
+### Manual Workflow
+
+1. **Edit locally**: Modify markdown files
 2. **Build**: Generate HTML for your static site
 3. **Export**: Generate WordPress-ready HTML with `ownwords export`
-4. **Sync to WordPress**: Copy exported HTML to WordPress editor
+4. **Copy to WordPress**: Paste exported HTML into WordPress editor
 5. **Deploy static site**: Push changes to your static site host
 
 ## Dependencies

@@ -11,13 +11,26 @@
  *   verify <html> <markdown>     Verify conversion quality
  *   batch <urls-file>            Batch convert multiple articles
  *   export <markdown> [output]   Export markdown to WordPress HTML
+ *   config-wp <action>           Manage WordPress site configurations
+ *   publish <markdown>           Publish markdown to WordPress
  */
 
 const fs = require('fs');
 const path = require('path');
-const { fetchArticle, fetchMultiple, extractSlugFromUrl } = require('../lib/fetch');
+const readline = require('readline');
+const { fetchArticle, extractSlugFromUrl } = require('../lib/fetch');
 const { convertFile } = require('../lib/convert');
 const { verifyConversion, verifyBatch } = require('../lib/verify');
+const { exportToWordPress } = require('../lib/export');
+const {
+  getWordPressSite,
+  addWordPressSite,
+  removeWordPressSite,
+  listWordPressSites,
+  checkConfigPermissions,
+  getConfigPath
+} = require('../lib/config');
+const { WpClient } = require('../lib/wp-api');
 
 const VERSION = require('../package.json').version;
 
@@ -44,6 +57,15 @@ Commands:
   batch <urls-file> [options]    Batch convert multiple articles
   export <markdown> [output]     Export markdown to WordPress HTML
 
+  config-wp <action> [args]      Manage WordPress site configurations
+    add <name> <url>             Add a new WordPress site
+    remove <name>                Remove a WordPress site
+    list                         List configured sites
+    test [name]                  Test connection to a site
+
+  publish <markdown> [options]   Publish markdown to WordPress
+  publish-all <dir> [options]    Batch publish all markdown files
+
 Options:
   --help, -h                     Show this help message
   --version, -v                  Show version number
@@ -68,6 +90,15 @@ Batch Options:
   --verify                       Verify after converting
   --skip-fetch                   Skip fetching, only convert existing HTML
 
+Publish Options:
+  --site=<name>                  WordPress site to publish to (default: default site)
+  --status=<status>              Post status: draft, publish, future, private (default: draft)
+  --update                       Update existing post if found by slug
+  --dry-run                      Show what would be published without publishing
+
+Export Options:
+  --include-wrapper              Add WordPress block editor comments
+
 Examples:
   # Fetch a single article
   ownwords fetch https://example.com/blog/2025/01/01/my-article/
@@ -81,8 +112,12 @@ Examples:
   # Batch convert from URLs file
   ownwords batch urls.txt --verify
 
-  # Batch verify all conversions
-  ownwords verify --batch ./raw ./content/articles
+  # Configure WordPress site
+  ownwords config-wp add myblog https://myblog.com --username=author
+
+  # Publish to WordPress
+  ownwords publish ./content/articles/my-article.md --status=draft
+  ownwords publish ./content/articles/my-article.md --status=publish --update
 `);
 }
 
@@ -450,16 +485,376 @@ function cmdExport(options) {
     process.exit(1);
   }
 
-  // For now, just a placeholder - export functionality to be implemented
-  console.log('Export functionality coming soon.');
-  console.log('For now, the markdown files can be converted manually or use the build system.');
+  if (!fs.existsSync(mdPath)) {
+    console.error(`Error: File not found: ${mdPath}`);
+    process.exit(1);
+  }
+
+  const slug = path.basename(mdPath, '.md');
+  const output = options.positional[1] || `./wordpress-export/${slug}.html`;
+
+  try {
+    const result = exportToWordPress(mdPath, output, {
+      includeWrapper: options.flags.includewrapper || false
+    });
+
+    if (!options.silent) {
+      console.log(`\nExported: ${result.title}`);
+      console.log(`  Words: ${result.wordCount}`);
+      console.log(`  Output: ${output}`);
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+/**
+ * Prompt for input (used for password entry)
+ */
+function prompt(question, hidden = false) {
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({
+      input: process.stdin,
+      output: process.stdout
+    });
+
+    if (hidden && process.stdin.isTTY) {
+      // For hidden input, we need to handle it differently
+      process.stdout.write(question);
+      let input = '';
+
+      process.stdin.setRawMode(true);
+      process.stdin.resume();
+      process.stdin.setEncoding('utf8');
+
+      const onData = (char) => {
+        if (char === '\n' || char === '\r' || char === '\u0004') {
+          process.stdin.setRawMode(false);
+          process.stdin.removeListener('data', onData);
+          process.stdout.write('\n');
+          rl.close();
+          resolve(input);
+        } else if (char === '\u0003') {
+          // Ctrl+C
+          process.exit(1);
+        } else if (char === '\u007F' || char === '\b') {
+          // Backspace
+          if (input.length > 0) {
+            input = input.slice(0, -1);
+          }
+        } else {
+          input += char;
+        }
+      };
+
+      process.stdin.on('data', onData);
+    } else {
+      rl.question(question, (answer) => {
+        rl.close();
+        resolve(answer);
+      });
+    }
+  });
+}
+
+async function cmdConfigWp(options) {
+  const action = options.positional[0];
+
+  if (!action) {
+    console.error('Error: Action required');
+    console.log('Usage: ownwords config-wp <add|remove|list|test> [args]');
+    process.exit(1);
+  }
+
+  switch (action) {
+    case 'add': {
+      const name = options.positional[1];
+      const url = options.positional[2];
+
+      if (!name || !url) {
+        console.error('Error: Name and URL required');
+        console.log('Usage: ownwords config-wp add <name> <url> --username=<user>');
+        process.exit(1);
+      }
+
+      let username = options.flags.username;
+      let appPassword = options.flags.password;
+
+      // Prompt for missing credentials
+      if (!username) {
+        username = await prompt('WordPress username: ');
+      }
+
+      if (!appPassword) {
+        appPassword = await prompt('Application password: ', true);
+      }
+
+      if (!username || !appPassword) {
+        console.error('Error: Username and password required');
+        process.exit(1);
+      }
+
+      const setAsDefault = options.flags.default === true ||
+        listWordPressSites().length === 0;
+
+      addWordPressSite(name, { url, username, appPassword }, setAsDefault);
+
+      console.log(`\n✅ Added WordPress site: ${name}`);
+      console.log(`   URL: ${url}`);
+      console.log(`   Username: ${username}`);
+      if (setAsDefault) {
+        console.log(`   Set as default site`);
+      }
+
+      // Check permissions
+      const perms = checkConfigPermissions();
+      if (!perms.secure) {
+        console.log(`\n⚠️  Warning: ${perms.message}`);
+      }
+      break;
+    }
+
+    case 'remove': {
+      const name = options.positional[1];
+
+      if (!name) {
+        console.error('Error: Site name required');
+        console.log('Usage: ownwords config-wp remove <name>');
+        process.exit(1);
+      }
+
+      if (removeWordPressSite(name)) {
+        console.log(`✅ Removed WordPress site: ${name}`);
+      } else {
+        console.error(`Error: Site not found: ${name}`);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'list': {
+      const sites = listWordPressSites();
+
+      if (sites.length === 0) {
+        console.log('No WordPress sites configured.');
+        console.log('\nAdd one with: ownwords config-wp add <name> <url>');
+      } else {
+        console.log('Configured WordPress sites:\n');
+        for (const site of sites) {
+          const defaultTag = site.isDefault ? ' (default)' : '';
+          console.log(`  ${site.name}${defaultTag}`);
+          console.log(`    URL: ${site.url}`);
+          console.log(`    Username: ${site.username}`);
+          console.log('');
+        }
+      }
+
+      console.log(`Config file: ${getConfigPath()}`);
+      break;
+    }
+
+    case 'test': {
+      const name = options.positional[1];
+      const site = getWordPressSite(name);
+
+      if (!site) {
+        if (name) {
+          console.error(`Error: Site not found: ${name}`);
+        } else {
+          console.error('Error: No WordPress sites configured');
+          console.log('Add one with: ownwords config-wp add <name> <url>');
+        }
+        process.exit(1);
+      }
+
+      console.log(`Testing connection to: ${site.url}`);
+
+      try {
+        const client = new WpClient(site);
+        const result = await client.testConnection();
+
+        if (result.success) {
+          console.log(`\n✅ Connection successful!`);
+          console.log(`   User: ${result.user.name} (@${result.user.slug})`);
+        } else {
+          console.log(`\n❌ Connection failed: ${result.error}`);
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error(`\n❌ Error: ${error.message}`);
+        process.exit(1);
+      }
+      break;
+    }
+
+    default:
+      console.error(`Unknown action: ${action}`);
+      console.log('Usage: ownwords config-wp <add|remove|list|test> [args]');
+      process.exit(1);
+  }
+}
+
+async function cmdPublish(options) {
+  const mdPath = options.positional[0];
+
+  if (!mdPath) {
+    console.error('Error: Markdown file required');
+    console.log('Usage: ownwords publish <markdown> [options]');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(mdPath)) {
+    console.error(`Error: File not found: ${mdPath}`);
+    process.exit(1);
+  }
+
+  // Get WordPress site
+  const siteName = options.flags.site;
+  const site = getWordPressSite(siteName);
+
+  if (!site) {
+    if (siteName) {
+      console.error(`Error: Site not found: ${siteName}`);
+    } else {
+      console.error('Error: No WordPress site configured');
+      console.log('Add one with: ownwords config-wp add <name> <url>');
+    }
+    process.exit(1);
+  }
+
+  const status = options.flags.status || 'draft';
+  const update = options.flags.update === true;
+  const dryRun = options.flags.dryrun === true;
+
+  if (!options.silent) {
+    console.log(`Publishing to: ${site.url}`);
+    console.log(`  File: ${mdPath}`);
+    console.log(`  Status: ${status}`);
+    console.log(`  Update existing: ${update}`);
+    if (dryRun) {
+      console.log('  DRY RUN - no changes will be made');
+    }
+  }
+
+  if (dryRun) {
+    // Just export and show what would be published
+    try {
+      const result = exportToWordPress(mdPath, null, { outputToFile: false });
+      console.log(`\nWould publish:`);
+      console.log(`  Title: ${result.title}`);
+      console.log(`  Slug: ${result.slug}`);
+      console.log(`  Words: ${result.wordCount}`);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  try {
+    const client = new WpClient(site);
+    const result = await client.publishMarkdown(mdPath, { status, update });
+
+    console.log(`\n✅ ${result.action === 'created' ? 'Published' : 'Updated'}!`);
+    console.log(`   Post ID: ${result.postId}`);
+    console.log(`   Slug: ${result.slug}`);
+    console.log(`   Status: ${result.status}`);
+    console.log(`   URL: ${result.link}`);
+  } catch (error) {
+    console.error(`\n❌ Publish failed: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+async function cmdPublishAll(options) {
+  const dir = options.positional[0];
+
+  if (!dir) {
+    console.error('Error: Directory required');
+    console.log('Usage: ownwords publish-all <directory> [options]');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(dir)) {
+    console.error(`Error: Directory not found: ${dir}`);
+    process.exit(1);
+  }
+
+  // Get all markdown files
+  const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
+
+  if (files.length === 0) {
+    console.log('No markdown files found in directory.');
+    return;
+  }
+
+  // Get WordPress site
+  const siteName = options.flags.site;
+  const site = getWordPressSite(siteName);
+
+  if (!site) {
+    if (siteName) {
+      console.error(`Error: Site not found: ${siteName}`);
+    } else {
+      console.error('Error: No WordPress site configured');
+      console.log('Add one with: ownwords config-wp add <name> <url>');
+    }
+    process.exit(1);
+  }
+
+  const status = options.flags.status || 'draft';
+  const update = options.flags.update === true;
+  const dryRun = options.flags.dryrun === true;
+
+  console.log(`Publishing ${files.length} files to: ${site.url}`);
+  console.log(`  Status: ${status}`);
+  console.log(`  Update existing: ${update}`);
+  if (dryRun) {
+    console.log('  DRY RUN - no changes will be made');
+  }
+  console.log('');
+
+  const client = new WpClient(site);
+  const results = { success: [], failed: [] };
+
+  for (const file of files) {
+    const mdPath = path.join(dir, file);
+    const slug = path.basename(file, '.md');
+
+    process.stdout.write(`  ${slug}... `);
+
+    if (dryRun) {
+      console.log('(dry run)');
+      results.success.push({ slug, action: 'dry-run' });
+      continue;
+    }
+
+    try {
+      const result = await client.publishMarkdown(mdPath, { status, update });
+      console.log(`✅ ${result.action}`);
+      results.success.push({ slug, ...result });
+    } catch (error) {
+      console.log(`❌ ${error.message}`);
+      results.failed.push({ slug, error: error.message });
+    }
+  }
+
+  // Summary
+  console.log(`\n${'='.repeat(40)}`);
+  console.log(`Success: ${results.success.length}`);
+  console.log(`Failed: ${results.failed.length}`);
+
+  if (results.failed.length > 0) {
+    process.exit(1);
+  }
 }
 
 // ============================================================================
 // MAIN
 // ============================================================================
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const options = parseArgs(args);
 
@@ -489,6 +884,15 @@ function main() {
     case 'export':
       cmdExport(options);
       break;
+    case 'config-wp':
+      await cmdConfigWp(options);
+      break;
+    case 'publish':
+      await cmdPublish(options);
+      break;
+    case 'publish-all':
+      await cmdPublishAll(options);
+      break;
     default:
       console.error(`Unknown command: ${options.command}`);
       console.log('Run "ownwords --help" for usage information.');
@@ -496,4 +900,7 @@ function main() {
   }
 }
 
-main();
+main().catch(error => {
+  console.error(`Error: ${error.message}`);
+  process.exit(1);
+});
