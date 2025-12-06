@@ -409,9 +409,9 @@ Rajiv Pant — [rajiv.com](https://rajiv.com)
 
 ---
 
-## Built with Synthesis Coding
+## Built with synthesis coding
 
-This project was built using [**Synthesis Coding**](https://synthesiscoding.com/) — the hands-on craft of rigorous AI-assisted development. Synthesis Coding is the practical application of [**Synthesis Engineering**](https://synthesiscoding.com/), the broader discipline encompassing methodology, organizational practices, and systematic quality standards.
+This project was built using [**synthesis coding**](https://synthesiscoding.com/) — the hands-on craft of rigorous AI-assisted development. Synthesis coding is the practical application of [**synthesis engineering**](https://synthesiscoding.com/), the broader discipline encompassing methodology, organizational practices, and systematic quality standards.
 
 Both guided development:
 - Human architectural decisions drove the design
