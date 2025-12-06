@@ -1,0 +1,46 @@
+{
+  "name": "ownwords",
+  "version": "1.0.0",
+  "description": "Own your words. WordPress to Markdown conversion toolkit for human authors with AI-assisted editing.",
+  "main": "lib/index.js",
+  "bin": {
+    "ownwords": "./bin/ownwords.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "lint": "eslint lib bin"
+  },
+  "keywords": [
+    "wordpress",
+    "markdown",
+    "conversion",
+    "cms",
+    "content-management",
+    "static-site",
+    "dual-publishing",
+    "ai-assisted",
+    "editorial",
+    "own-your-content",
+    "local-first"
+  ],
+  "author": "Rajiv Pant",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rajivpant/ownwords.git"
+  },
+  "bugs": {
+    "url": "https://github.com/rajivpant/ownwords/issues"
+  },
+  "homepage": "https://github.com/rajivpant/ownwords#readme",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/",
+    "README.md",
+    "LICENSE"
+  ]
+}

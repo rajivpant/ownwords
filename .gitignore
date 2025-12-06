@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Output directories
+raw/
+wordpress-export/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor files
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test coverage
+coverage/
+
+# Environment files
+.env
+.env.local
