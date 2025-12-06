@@ -45,6 +45,100 @@ declare module 'ownwords' {
   }>;
 
   // ============================================================================
+  // Fetch API Module (REST API - v1.2.0)
+  // ============================================================================
+
+  /**
+   * Normalized WordPress post with embedded data
+   */
+  export interface NormalizedPost {
+    id: number;
+    slug: string;
+    title: string;
+    content: string;
+    excerpt: string;
+    date: string;
+    dateGmt: string;
+    modified: string;
+    modifiedGmt: string;
+    status: string;
+    type: string;
+    link: string;
+    author: {
+      id: number;
+      name: string;
+      slug: string;
+      avatar: string;
+    };
+    categories: Array<{ id: number; name: string; slug: string }>;
+    tags: Array<{ id: number; name: string; slug: string }>;
+    featuredImage: {
+      id: number;
+      url: string;
+      alt: string;
+      title: string;
+      width: number;
+      height: number;
+    } | null;
+    format: string;
+    meta: Record<string, unknown>;
+  }
+
+  /**
+   * Result from fetching via REST API
+   */
+  export interface FetchApiResult {
+    slug: string;
+    title: string;
+    date: string;
+    mdPath: string;
+    jsonPath: string | null;
+    wordCount: number;
+    categories: string[];
+    tags: string[];
+    author: string;
+  }
+
+  /**
+   * Options for REST API fetch
+   */
+  export interface FetchApiOptions {
+    site?: string;
+    type?: 'posts' | 'pages';
+    silent?: boolean;
+    skipSidecar?: boolean;
+  }
+
+  /**
+   * Fetch a WordPress article via REST API
+   */
+  export function fetchViaApi(
+    urlOrSlug: string,
+    outputDir: string,
+    options?: FetchApiOptions
+  ): Promise<FetchApiResult>;
+
+  /**
+   * Fetch multiple WordPress articles via REST API
+   */
+  export function fetchViaApiMultiple(
+    urlsOrSlugs: string[],
+    outputDir: string,
+    options?: FetchApiOptions
+  ): Promise<{
+    total: number;
+    success: number;
+    failed: number;
+    articles: FetchApiResult[];
+    errors: Array<{ input: string; error: string }>;
+  }>;
+
+  /**
+   * Generate enriched YAML front matter from normalized API response
+   */
+  export function generateEnrichedFrontMatter(normalized: NormalizedPost): string;
+
+  // ============================================================================
   // Convert Module
   // ============================================================================
 
@@ -449,6 +543,29 @@ declare module 'ownwords' {
         status?: 'draft' | 'publish';
       }
     ): Promise<PublishResult>;
+
+    // REST API Fetch Methods (v1.2.0)
+
+    /**
+     * Get a post by slug with embedded data (categories, tags, author, featured image)
+     */
+    getPostBySlugWithEmbed(
+      slug: string,
+      type?: 'posts' | 'pages'
+    ): Promise<WpPost | null>;
+
+    /**
+     * Get a post by ID with embedded data
+     */
+    getPostByIdWithEmbed(
+      postId: number,
+      type?: 'posts' | 'pages'
+    ): Promise<WpPost>;
+
+    /**
+     * Normalize a WordPress REST API response with _embed data
+     */
+    normalizeEmbedResponse(post: WpPost): NormalizedPost;
   }
 
   // ============================================================================
@@ -544,4 +661,134 @@ declare module 'ownwords' {
       }>;
     };
   }
+
+  // ============================================================================
+  // Compare Module (Content Drift Detection)
+  // ============================================================================
+
+  /**
+   * Typography analysis result
+   */
+  export interface TypographyAnalysis {
+    differences: Array<{
+      name: string;
+      description: string;
+      text1Count: number;
+      text2Count: number;
+      diff: number;
+    }>;
+    text1Stats: Record<string, number>;
+    text2Stats: Record<string, number>;
+  }
+
+  /**
+   * First character difference found
+   */
+  export interface FirstDifference {
+    position: number;
+    char1?: string;
+    char2?: string;
+    charCode1?: number;
+    charCode2?: number;
+    context1?: string;
+    context2?: string;
+    lengthDifference?: boolean;
+    length1?: number;
+    length2?: number;
+  }
+
+  /**
+   * Content comparison result
+   */
+  export interface CompareResult {
+    identical: boolean;
+    identicalAfterNormalization: boolean;
+    stats: {
+      content1: {
+        totalLength: number;
+        bodyLength: number;
+        wordCount: number;
+        lineCount: number;
+      };
+      content2: {
+        totalLength: number;
+        bodyLength: number;
+        wordCount: number;
+        lineCount: number;
+      };
+    };
+    typography: TypographyAnalysis;
+    firstDifference: FirstDifference | null;
+    frontMatter: {
+      content1Has: boolean;
+      content2Has: boolean;
+    };
+  }
+
+  /**
+   * Batch comparison result
+   */
+  export interface BatchCompareResult {
+    total: number;
+    identical: number;
+    identicalAfterNormalization: number;
+    different: number;
+    results: Array<CompareResult & {
+      name: string;
+      file1: string;
+      file2: string;
+      error: string | null;
+    }>;
+  }
+
+  /**
+   * Compare options
+   */
+  export interface CompareOptions {
+    normalizeTypography?: boolean;
+  }
+
+  /**
+   * Compare two markdown files for content drift
+   */
+  export function compareFiles(
+    path1: string,
+    path2: string,
+    options?: CompareOptions
+  ): CompareResult;
+
+  /**
+   * Compare two markdown content strings
+   */
+  export function compareContent(
+    content1: string,
+    content2: string,
+    options?: CompareOptions
+  ): CompareResult;
+
+  /**
+   * Compare multiple file pairs
+   */
+  export function compareBatch(
+    pairs: Array<{ file1: string; file2: string; name?: string }>,
+    options?: CompareOptions
+  ): BatchCompareResult;
+
+  /**
+   * Generate a human-readable comparison report
+   */
+  export function generateCompareReport(
+    comparison: CompareResult,
+    options?: { verbose?: boolean }
+  ): string;
+
+  /**
+   * Normalize text for comparison (standardize quotes, spaces, dashes)
+   */
+  export function normalizeForComparison(text: string): string;
+
+  /**
+   * Analyze typography differences between two texts
+   */
+  export function analyzeTypography(text1: string, text2: string): TypographyAnalysis;
 }

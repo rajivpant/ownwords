@@ -62,15 +62,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.2.0] - 2025-12-05
+
+### Added
+
+- **REST API fetch mode** - Fetch content from your own WordPress sites via REST API instead of HTML scraping
+  - `ownwords fetch <url> --api` fetches via REST API with full metadata
+  - `ownwords batch urls.txt --api` batch fetch multiple articles via API
+  - Produces both Markdown (with enriched front matter) and JSON sidecar files
+  - JSON sidecar stores complete API response for future bi-directional sync
+
+- **Enriched front matter** when using `--api` mode:
+  - `categories` and `tags` as YAML arrays with names
+  - `author` field with author name
+  - `featured_image` and `featured_image_alt` for featured media
+  - `wordpress.post_id`, `wordpress.category_ids`, `wordpress.tag_ids`, `wordpress.author_id`
+  - `wordpress.synced_at` timestamp for sync tracking
+
+- **New WpClient methods** for programmatic REST API access:
+  - `getPostBySlugWithEmbed(slug, type)` - fetch with embedded categories, tags, author, featured image
+  - `getPostByIdWithEmbed(postId, type)` - fetch by ID with embedded data
+  - `normalizeEmbedResponse(post)` - normalize _embed data to clean structure
+
+- **New library functions**:
+  - `fetchViaApi(urlOrSlug, outputDir, options)` - fetch single article via API
+  - `fetchViaApiMultiple(urlsOrSlugs, outputDir, options)` - batch fetch via API
+  - `generateEnrichedFrontMatter(normalized)` - generate YAML from API data
+
+- **Content comparison utilities** for detecting content drift between local and remote:
+  - `ownwords compare <file1> <file2>` - compare two markdown files
+  - `ownwords compare-batch <mapping.json>` - compare multiple file pairs
+  - `--normalize` flag to ignore typography differences (curly quotes, non-breaking spaces)
+  - `--json` flag for machine-readable output
+  - Detects: identical content, typography-only differences, structural differences
+  - Analyzes: word counts, line counts, quote styles, special characters
+
+- **New library functions for comparison**:
+  - `compareFiles(path1, path2, options)` - compare two markdown files
+  - `compareContent(content1, content2, options)` - compare markdown strings
+  - `compareBatch(pairs, options)` - compare multiple file pairs
+  - `generateCompareReport(comparison, options)` - generate human-readable report
+  - `normalizeForComparison(text)` - normalize typography for comparison
+  - `analyzeTypography(text1, text2)` - analyze typography differences
+
+### Changed
+
+- CLI help updated with REST API fetch examples and options
+
+---
+
 ## [Unreleased]
 
 ### Planned
 
-- **REST API fetch mode** - For your own WordPress sites, fetch content via REST API instead of scraping HTML. Benefits:
-  - Clean structured data (title, content, excerpt)
-  - Full metadata (categories, tags, author, custom fields)
-  - Bi-directional sync with tag/category normalization
-  - No HTML parsing needed
-- TypeScript type definitions
+- TypeScript type definitions (now included!)
 - Plugin system for custom converters
 - Sync status tracking in front matter
+- Bi-directional sync (push local changes back to WordPress)

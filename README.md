@@ -38,12 +38,24 @@ npx ownwords --help
 ### Fetch a WordPress Article
 
 ```bash
-# Fetch and save to ./raw/
+# Fetch via HTML scraping (works for any WordPress site)
 ownwords fetch https://example.com/blog/2025/01/01/my-article/
 
-# Specify output path
+# Fetch via REST API (for your own sites - richer metadata)
+ownwords fetch https://myblog.com/2025/01/my-article/ --api
+ownwords fetch my-article-slug --api --site=myblog
+
+# Specify output path (HTML scraping mode)
 ownwords fetch https://example.com/blog/2025/01/01/my-article/ ./raw/my-article.html
 ```
+
+**REST API mode benefits:**
+
+- Full categories and tags (names, slugs, IDs)
+- Author information
+- Featured image URL and alt text
+- Exact excerpt (not parsed from HTML)
+- JSON sidecar file for future bi-directional sync
 
 ### Convert HTML to Markdown
 
@@ -73,8 +85,11 @@ ownwords verify --verbose ./raw/my-article.html ./content/articles/my-article.md
 ### Batch Convert Multiple Articles
 
 ```bash
-# From URLs file
+# From URLs file (HTML scraping)
 ownwords batch urls.txt --verify
+
+# From URLs file via REST API (richer metadata)
+ownwords batch urls.txt --api --site=myblog
 
 # Skip fetch (convert existing HTML only)
 ownwords batch urls.txt --skip-fetch --verify
@@ -171,6 +186,8 @@ console.log(`${results.passed} of ${results.total} passed`);
 
 ## Front Matter Schema
 
+### HTML Scraping Mode
+
 Generated Markdown includes YAML front matter:
 
 ```yaml
@@ -185,6 +202,38 @@ series_order: 1
 wordpress_synced: "2025-01-01"
 ---
 ```
+
+### REST API Mode (--api)
+
+When fetching via REST API, you get enriched front matter with full metadata:
+
+```yaml
+---
+title: "Article Title"
+slug: "article-slug"
+date: "2025-01-01"
+modified: "2025-01-15"
+description: "Article excerpt"
+canonical_url: "https://example.com/article-slug/"
+categories:
+  - "Programming"
+  - "JavaScript"
+tags:
+  - "closures"
+  - "functions"
+author: "Rajiv Pant"
+featured_image: "https://example.com/uploads/image.jpg"
+featured_image_alt: "Image description"
+wordpress:
+  post_id: 1234
+  category_ids: [5, 12]
+  tag_ids: [23, 45]
+  author_id: 1
+  synced_at: "2025-12-05T21:30:00Z"
+---
+```
+
+A JSON sidecar file (`article-slug.json`) is also created with the complete API response for future bi-directional sync.
 
 ## Verification Checks
 
@@ -226,7 +275,31 @@ ownwords config-wp list
 ownwords config-wp test myblog
 ```
 
-**Note:** You need to create an Application Password in WordPress (Users → Your Profile → Application Passwords).
+### Creating an Application Password
+
+You need a WordPress Application Password (not your regular login password) to use the REST API.
+
+**For self-hosted WordPress:**
+
+1. Go to your WordPress admin: `https://yoursite.com/wp-admin/`
+2. Navigate to Users → Your Profile
+3. Scroll to "Application Passwords" section
+4. Enter a name (e.g., "ownwords") and click "Add New"
+5. Copy the generated password (format: `xxxx xxxx xxxx xxxx xxxx xxxx`)
+
+**For WordPress.com hosted sites:**
+
+1. Go to <https://wordpress.com/me/security/two-step>
+2. Scroll to "Application Passwords"
+3. Enter a name (e.g., "ownwords") and click "Generate Password"
+4. Copy the generated password
+5. Use your **WordPress.com username** (not your site username) when configuring
+
+**Security notes:**
+
+- Credentials are stored in `~/.ownwords/config.json` with `600` permissions (owner read/write only)
+- Application passwords can be revoked anytime without affecting your main password
+- Never commit credentials to version control
 
 ### Publish to WordPress
 

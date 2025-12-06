@@ -31,6 +31,12 @@ const {
   getConfigPath
 } = require('../lib/config');
 const { WpClient } = require('../lib/wp-api');
+const { fetchViaApi, fetchViaApiMultiple } = require('../lib/fetch-api');
+const {
+  compareFiles,
+  compareBatch,
+  generateReport
+} = require('../lib/compare');
 
 const VERSION = require('../package.json').version;
 
@@ -66,6 +72,9 @@ Commands:
   publish <markdown> [options]   Publish markdown to WordPress
   publish-all <dir> [options]    Batch publish all markdown files
 
+  compare <file1> <file2>        Compare two markdown files for content drift
+  compare-batch <mapping.json>   Compare multiple file pairs from a JSON mapping
+
 Options:
   --help, -h                     Show this help message
   --version, -v                  Show version number
@@ -74,6 +83,9 @@ Options:
 
 Fetch Options:
   --output-dir=<dir>             Output directory (default: ./raw)
+  --api                          Use WordPress REST API instead of HTML scraping
+  --site=<name>                  WordPress site to use (for --api mode)
+  --type=<type>                  Content type: posts (default) or pages
 
 Convert Options:
   --slug=<slug>                  Override the slug
@@ -89,6 +101,8 @@ Batch Options:
   --output-dir=<dir>             Directory for Markdown files (default: ./content/articles)
   --verify                       Verify after converting
   --skip-fetch                   Skip fetching, only convert existing HTML
+  --api                          Use WordPress REST API instead of HTML scraping
+  --site=<name>                  WordPress site to use (for --api mode)
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
@@ -99,9 +113,18 @@ Publish Options:
 Export Options:
   --include-wrapper              Add WordPress block editor comments
 
+Compare Options:
+  --normalize                    Normalize typography before comparing (quotes, spaces)
+  --verbose                      Show detailed context for differences
+  --json                         Output comparison results as JSON
+
 Examples:
-  # Fetch a single article
+  # Fetch a single article (HTML scraping)
   ownwords fetch https://example.com/blog/2025/01/01/my-article/
+
+  # Fetch via REST API (richer metadata: categories, tags, author)
+  ownwords fetch https://myblog.com/2025/01/my-article/ --api
+  ownwords fetch my-article-slug --api --site=myblog
 
   # Convert HTML to Markdown
   ownwords convert ./raw/my-article.html ./content/articles/my-article.md
@@ -147,6 +170,8 @@ function parseArgs(args) {
       options.flags.strict = true;
     } else if (arg === '--skip-fetch') {
       options.flags.skipFetch = true;
+    } else if (arg === '--api') {
+      options.flags.api = true;
     } else if (arg.startsWith('--')) {
       const [key, value] = arg.substring(2).split('=');
       options.flags[key.replace(/-/g, '')] = value || true;
@@ -164,20 +189,56 @@ function parseArgs(args) {
 // COMMANDS
 // ============================================================================
 
-function cmdFetch(options) {
-  const url = options.positional[0];
-  if (!url) {
-    console.error('Error: URL required');
+async function cmdFetch(options) {
+  const urlOrSlug = options.positional[0];
+  if (!urlOrSlug) {
+    console.error('Error: URL or slug required');
     console.log('Usage: ownwords fetch <url> [output]');
+    console.log('       ownwords fetch <url-or-slug> --api [--site=<name>]');
     process.exit(1);
   }
 
-  const slug = extractSlugFromUrl(url);
+  // REST API mode
+  if (options.flags.api) {
+    const outputDir = options.flags.outputdir || './content/articles';
+
+    try {
+      const result = await fetchViaApi(urlOrSlug, outputDir, {
+        site: options.flags.site,
+        type: options.flags.type || 'posts',
+        silent: options.silent
+      });
+
+      if (!options.silent) {
+        console.log(`\n✅ Fetched via API: ${result.title}`);
+        console.log(`   Slug: ${result.slug}`);
+        console.log(`   Date: ${result.date}`);
+        console.log(`   Words: ${result.wordCount}`);
+        if (result.categories.length > 0) {
+          console.log(`   Categories: ${result.categories.join(', ')}`);
+        }
+        if (result.tags.length > 0) {
+          console.log(`   Tags: ${result.tags.join(', ')}`);
+        }
+        console.log(`   Markdown: ${result.mdPath}`);
+        if (result.jsonPath) {
+          console.log(`   JSON sidecar: ${result.jsonPath}`);
+        }
+      }
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // HTML scraping mode (original behavior)
+  const slug = extractSlugFromUrl(urlOrSlug);
   const outputDir = options.flags.outputdir || './raw';
   const output = options.positional[1] || path.join(outputDir, `${slug || 'article'}.html`);
 
   try {
-    fetchArticle(url, output, { silent: options.silent });
+    fetchArticle(urlOrSlug, output, { silent: options.silent });
     if (!options.silent) {
       console.log(`\nFetched successfully: ${output}`);
     }
@@ -343,7 +404,7 @@ function printVerifyResult(results, verbose) {
   }
 }
 
-function cmdBatch(options) {
+async function cmdBatch(options) {
   const urlsFile = options.positional[0];
 
   if (!urlsFile) {
@@ -373,15 +434,66 @@ function cmdBatch(options) {
 
   const rawDir = options.flags.rawdir || './raw';
   const outputDir = options.flags.outputdir || './content/articles';
+  const useApi = options.flags.api === true;
 
   console.log('='.repeat(60));
-  console.log('ownwords Batch Conversion');
+  console.log(`ownwords Batch ${useApi ? 'API Fetch' : 'Conversion'}`);
   console.log('='.repeat(60));
   console.log(`  URLs: ${urls.length}`);
-  console.log(`  Raw directory: ${rawDir}`);
+  if (useApi) {
+    console.log(`  Mode: REST API`);
+    if (options.flags.site) {
+      console.log(`  Site: ${options.flags.site}`);
+    }
+  } else {
+    console.log(`  Raw directory: ${rawDir}`);
+  }
   console.log(`  Output directory: ${outputDir}`);
   console.log('='.repeat(60));
 
+  // REST API mode - fetch directly to markdown with enriched metadata
+  if (useApi) {
+    try {
+      const batchResults = await fetchViaApiMultiple(urls, outputDir, {
+        site: options.flags.site,
+        type: options.flags.type || 'posts',
+        silent: options.silent
+      });
+
+      // Summary
+      console.log(`\n${'='.repeat(60)}`);
+      console.log('SUMMARY');
+      console.log('='.repeat(60));
+      console.log(`  Total: ${batchResults.total}`);
+      console.log(`  Successful: ${batchResults.success}`);
+      console.log(`  Failed: ${batchResults.failed}`);
+
+      if (batchResults.articles.length > 0) {
+        console.log('\nFetched:');
+        batchResults.articles.forEach(r => {
+          const meta = [];
+          if (r.categories.length > 0) meta.push(`${r.categories.length} categories`);
+          if (r.tags.length > 0) meta.push(`${r.tags.length} tags`);
+          const metaStr = meta.length > 0 ? ` [${meta.join(', ')}]` : '';
+          console.log(`  ✅ ${r.slug} (${r.wordCount} words)${metaStr}`);
+        });
+      }
+
+      if (batchResults.errors.length > 0) {
+        console.log('\nFailed:');
+        batchResults.errors.forEach(e => {
+          console.log(`  ❌ ${e.input}: ${e.error}`);
+        });
+        process.exit(1);
+      }
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  // HTML scraping mode (original behavior)
   // Ensure directories exist
   if (!fs.existsSync(rawDir)) {
     fs.mkdirSync(rawDir, { recursive: true });
@@ -851,6 +963,140 @@ async function cmdPublishAll(options) {
 }
 
 // ============================================================================
+// COMPARE COMMANDS
+// ============================================================================
+
+function cmdCompare(options) {
+  const file1 = options.positional[0];
+  const file2 = options.positional[1];
+
+  if (!file1 || !file2) {
+    console.error('Error: Two files required');
+    console.log('Usage: ownwords compare <file1> <file2> [options]');
+    console.log('');
+    console.log('Options:');
+    console.log('  --normalize    Normalize typography before comparing');
+    console.log('  --verbose      Show detailed context for differences');
+    console.log('  --json         Output as JSON');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(file1)) {
+    console.error(`Error: File not found: ${file1}`);
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(file2)) {
+    console.error(`Error: File not found: ${file2}`);
+    process.exit(1);
+  }
+
+  const normalizeTypography = options.flags.normalize === true;
+  const verbose = options.flags.verbose === true;
+  const jsonOutput = options.flags.json === true;
+
+  try {
+    const result = compareFiles(file1, file2, { normalizeTypography });
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    // Human-readable output
+    console.log('='.repeat(60));
+    console.log('Content Comparison');
+    console.log('='.repeat(60));
+    console.log(`  File 1: ${file1}`);
+    console.log(`  File 2: ${file2}`);
+    console.log('');
+
+    console.log(generateReport(result, { verbose }));
+
+    // Exit code based on result
+    if (!result.identicalAfterNormalization) {
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+function cmdCompareBatch(options) {
+  const mappingFile = options.positional[0];
+
+  if (!mappingFile) {
+    console.error('Error: Mapping file required');
+    console.log('Usage: ownwords compare-batch <mapping.json> [options]');
+    console.log('');
+    console.log('The mapping file should be a JSON array of objects with:');
+    console.log('  { "file1": "path/to/local.md", "file2": "path/to/remote.md", "name": "optional label" }');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(mappingFile)) {
+    console.error(`Error: Mapping file not found: ${mappingFile}`);
+    process.exit(1);
+  }
+
+  const normalizeTypography = options.flags.normalize === true;
+  const jsonOutput = options.flags.json === true;
+
+  try {
+    const mapping = JSON.parse(fs.readFileSync(mappingFile, 'utf8'));
+
+    if (!Array.isArray(mapping)) {
+      console.error('Error: Mapping file must contain a JSON array');
+      process.exit(1);
+    }
+
+    const result = compareBatch(mapping, { normalizeTypography });
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+
+    // Human-readable output
+    console.log('='.repeat(60));
+    console.log('Batch Content Comparison');
+    console.log('='.repeat(60));
+    console.log(`  Total files: ${result.total}`);
+    console.log(`  Identical: ${result.identical}`);
+    console.log(`  Identical (after normalization): ${result.identicalAfterNormalization}`);
+    console.log(`  Different: ${result.different}`);
+    console.log('');
+
+    for (const r of result.results) {
+      const status = r.error ? '❌ ERROR' :
+                     r.identical ? '✅ IDENTICAL' :
+                     r.identicalAfterNormalization ? '🔤 TYPOGRAPHY ONLY' :
+                     '⚠️  DIFFERENT';
+
+      console.log(`${status}: ${r.name}`);
+
+      if (r.error) {
+        console.log(`   Error: ${r.error}`);
+      } else if (!r.identicalAfterNormalization) {
+        console.log(`   Words: ${r.stats.content1.wordCount} vs ${r.stats.content2.wordCount}`);
+        if (r.typography.differences.length > 0) {
+          console.log(`   Typography diffs: ${r.typography.differences.length}`);
+        }
+      }
+    }
+
+    // Exit code based on result
+    if (result.different > 0) {
+      process.exit(1);
+    }
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -870,7 +1116,7 @@ async function main() {
 
   switch (options.command) {
     case 'fetch':
-      cmdFetch(options);
+      await cmdFetch(options);
       break;
     case 'convert':
       cmdConvert(options);
@@ -879,7 +1125,7 @@ async function main() {
       cmdVerify(options);
       break;
     case 'batch':
-      cmdBatch(options);
+      await cmdBatch(options);
       break;
     case 'export':
       cmdExport(options);
@@ -892,6 +1138,12 @@ async function main() {
       break;
     case 'publish-all':
       await cmdPublishAll(options);
+      break;
+    case 'compare':
+      cmdCompare(options);
+      break;
+    case 'compare-batch':
+      cmdCompareBatch(options);
       break;
     default:
       console.error(`Unknown command: ${options.command}`);
