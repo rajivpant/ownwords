@@ -1,6 +1,6 @@
 {
   "name": "ownwords",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Own your words. WordPress to Markdown conversion toolkit for human authors with AI-assisted editing.",
   "main": "lib/index.js",
   "types": "types/index.d.ts",

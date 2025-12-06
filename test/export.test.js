@@ -79,13 +79,17 @@ describe('markdownToHtml', () => {
   it('converts inline code', () => {
     const md = 'Use the `print()` function';
     const result = markdownToHtml(md);
-    assert.ok(result.includes('<code>print()</code>'));
+    // Now includes inline styles for WordPress rendering
+    assert.ok(result.includes('<code'));
+    assert.ok(result.includes('>print()</code>'));
   });
 
   it('converts code blocks', () => {
     const md = '```\nconst x = 1;\n```';
     const result = markdownToHtml(md);
-    assert.ok(result.includes('<pre><code>'));
+    // Now includes inline styles for WordPress rendering
+    assert.ok(result.includes('<pre'));
+    assert.ok(result.includes('<code>'));
     assert.ok(result.includes('const x = 1;'));
     assert.ok(result.includes('</code></pre>'));
   });
@@ -101,6 +105,56 @@ describe('markdownToHtml', () => {
     const result = markdownToHtml(md);
     assert.ok(result.includes('&lt;script&gt;'));
     assert.ok(!result.includes('<script>'));
+  });
+
+  it('preserves list-like content inside code blocks', () => {
+    // This tests the placeholder pattern - list items inside code should NOT become <li>
+    const md = '```\n- item one\n- item two\n```';
+    const result = markdownToHtml(md);
+    // Should have escaped dashes, not <li> tags inside code
+    assert.ok(result.includes('<pre'));
+    assert.ok(result.includes('<code>'));
+    assert.ok(result.includes('- item one'));
+    assert.ok(!result.includes('<li>item one</li>'));
+  });
+
+  it('preserves heading-like content inside code blocks', () => {
+    const md = '```\n## This is not a heading\n```';
+    const result = markdownToHtml(md);
+    // Should be plain text inside code, not an h2
+    assert.ok(result.includes('## This is not a heading'));
+    assert.ok(!result.includes('<h2>This is not a heading</h2>'));
+  });
+
+  it('adds inline styles to code blocks for WordPress', () => {
+    const md = '```\nconst x = 1;\n```';
+    const result = markdownToHtml(md);
+    // Should include inline style for WordPress rendering
+    assert.ok(result.includes('style="'));
+    assert.ok(result.includes('background:'));
+  });
+
+  it('adds inline styles to inline code for WordPress', () => {
+    const md = 'Use the `print()` function';
+    const result = markdownToHtml(md);
+    // Should include inline style for WordPress rendering
+    assert.ok(result.includes('<code style="'));
+  });
+
+  it('handles code blocks with shell commands', () => {
+    const md = '```bash\n$ claude "Hello world"\n```';
+    const result = markdownToHtml(md);
+    assert.ok(result.includes('class="language-bash"'));
+    assert.ok(result.includes('$ claude'));
+  });
+
+  it('handles multiple code blocks in sequence', () => {
+    const md = '```python\nprint("hello")\n```\n\nSome text\n\n```javascript\nconsole.log("world")\n```';
+    const result = markdownToHtml(md);
+    assert.ok(result.includes('class="language-python"'));
+    assert.ok(result.includes('class="language-javascript"'));
+    assert.ok(result.includes('print'));
+    assert.ok(result.includes('console.log'));
   });
 
   it('converts unordered lists', () => {
@@ -163,7 +217,8 @@ const x = 1;
     assert.ok(result.includes('<em>italic</em>'));
     assert.ok(result.includes('<li>List item 1</li>'));
     assert.ok(result.includes('<a href="https://example.com">link</a>'));
-    assert.ok(result.includes('<code>code</code>'));
+    // Inline code now includes style attribute
+    assert.ok(result.includes('>code</code>'));
     assert.ok(result.includes('class="language-javascript"'));
     assert.ok(result.includes('<blockquote>A famous quote</blockquote>'));
   });
