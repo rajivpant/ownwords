@@ -1,7 +1,9 @@
 /**
  * ownwords - Own your words
  *
- * WordPress to Markdown conversion toolkit for human authors.
+ * Open source toolkit for authors who want to own their words.
+ * Bi-directional WordPress sync, local Markdown editing, batch AI-assisted
+ * editorial operations, and dual publishing to both WordPress and static sites.
  */
 
 declare module 'ownwords' {

@@ -3,7 +3,9 @@
 /**
  * ownwords CLI
  *
- * Own your words. WordPress to Markdown conversion toolkit for human authors.
+ * Own your words. Open source toolkit for authors who want to own their words.
+ * Bi-directional WordPress sync, local Markdown editing, batch AI-assisted
+ * editorial operations, and dual publishing to both WordPress and static sites.
  *
  * Commands:
  *   fetch <url> [output]         Fetch a WordPress article
