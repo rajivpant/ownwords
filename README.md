@@ -12,6 +12,44 @@ This toolkit is for human authors who want to:
 
 **This is explicitly NOT for**: AI content generation, "slop" production, or replacing human authorship.
 
+## Use Cases
+
+Without tooling like ownwords, batch content operations on WordPress sites require days, weeks, or months of manual labor — and the process is stressful and error-prone. This toolkit makes programmatic content management practical.
+
+### Content Updates at Scale
+
+- **Author bio updates** — When author information lives in article body content (not just metadata), update hundreds of articles when someone's title, company, or bio changes
+- **Terminology standardization** — Rebrand a product name, update style guide conventions, or fix outdated terms across your entire archive
+- **Corrections at scale** — Fix factual errors, update statistics, or revise outdated information across multiple articles
+- **Legal/compliance updates** — Update disclosures, disclaimers, or required language across all relevant content
+
+### SEO and Link Management
+
+- **Internal link building** — Add cross-references between related articles for improved SEO and link authority
+- **Canonical URL migration** — Update links when content moves between domains or URL structures change
+- **Broken link repair** — Find and fix broken internal links across your content library
+- **Domain migration** — Update all links when moving from one domain to another
+
+### Content Organization
+
+- **Front matter enrichment** — Batch-add categories, tags, or structured metadata to legacy content
+- **Taxonomy cleanup** — Standardize category and tag usage across articles
+- **Series organization** — Add series metadata to group related articles
+
+### Multi-Platform Publishing
+
+- **Dual publishing** — Maintain content on both WordPress and a static site (Cloudflare Pages, Netlify, GitHub Pages)
+- **Content backup** — Keep version-controlled Markdown files as the source of truth, with WordPress as a publishing target
+- **Platform migration** — Export content from WordPress to other CMS platforms or static site generators
+
+### AI-Assisted Editorial Operations
+
+- **Batch editing with AI** — Use Claude, Cursor, or other AI assistants to make intelligent edits across your content library
+- **Style consistency** — Have AI assistants enforce writing style, tone, or formatting conventions
+- **Content enrichment** — Add summaries, metadata, or structured data to existing articles
+
+The Agent API includes `dryRun` support for all batch operations, so you can preview changes before applying them.
+
 ## Features
 
 - **Fetch**: Download WordPress articles as raw HTML
