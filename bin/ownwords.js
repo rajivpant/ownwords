@@ -39,7 +39,13 @@ const {
   compareBatch,
   generateReport
 } = require('../lib/compare');
-const { updateFrontMatterWithWordPress } = require('../lib/image-utils');
+const {
+  updateFrontMatterWithWordPress,
+  readWordPressMetadata,
+  extractLocalImages,
+  loadSidecar,
+  getImagesToUpload
+} = require('../lib/image-utils');
 
 const VERSION = require('../package.json').version;
 
@@ -118,6 +124,12 @@ Publish Options:
   --update                       Update existing post if found by slug
   --date=<iso-date>              Publish date in ISO 8601 format (e.g., 2025-12-07T23:00:00)
   --dryrun                       Show what would be published without publishing
+  --yes                          Skip confirmation prompts (for automation)
+
+Safeguards:
+  - If wordpress.post_id exists in front matter, --update is auto-enabled
+  - Creating new posts requires confirmation (use --yes to skip)
+  - Use --dryrun to preview changes before publishing
 
 Export Options:
   --include-wrapper              Add WordPress block editor comments
@@ -863,15 +875,27 @@ async function cmdPublish(options) {
   }
 
   const status = options.flags.status || 'draft';
-  const update = options.flags.update === true;
+  let update = options.flags.update === true;
   const dryRun = options.flags.dryrun === true;
   const publishDate = options.flags.date; // ISO 8601 format, e.g., "2025-12-07T23:00:00"
+
+  // SAFEGUARD: Auto-detect existing post from front matter
+  // If wordpress.post_id exists, automatically use update mode to prevent duplicate drafts
+  const existingMetadata = readWordPressMetadata(mdPath);
+  const existingPostId = existingMetadata?.post_id;
+
+  if (existingPostId && !update) {
+    console.log(`\n⚠️  SAFEGUARD: Found existing WordPress post_id: ${existingPostId}`);
+    console.log(`   Automatically enabling --update mode to prevent duplicate draft creation.`);
+    console.log(`   To force a new post, delete the wordpress.post_id from front matter.\n`);
+    update = true;
+  }
 
   if (!options.silent) {
     console.log(`Publishing to: ${site.url}`);
     console.log(`  File: ${mdPath}`);
     console.log(`  Status: ${status}`);
-    console.log(`  Update existing: ${update}`);
+    console.log(`  Update existing: ${update}${existingPostId ? ` (post_id: ${existingPostId})` : ''}`);
     if (publishDate) {
       console.log(`  Publish date: ${publishDate}`);
     }
@@ -881,18 +905,88 @@ async function cmdPublish(options) {
   }
 
   if (dryRun) {
-    // Just export and show what would be published
+    // Enhanced dry-run: show what would be published AND image upload plan
     try {
       const result = exportToWordPress(mdPath, null, { outputToFile: false });
-      console.log(`\nWould publish:`);
-      console.log(`  Title: ${result.title}`);
-      console.log(`  Slug: ${result.slug}`);
-      console.log(`  Words: ${result.wordCount}`);
+      const mdDir = path.dirname(mdPath);
+      const markdown = fs.readFileSync(mdPath, 'utf-8');
+
+      console.log(`\n📋 DRY RUN SUMMARY`);
+      console.log(`${'─'.repeat(50)}`);
+
+      // Post info
+      console.log(`\n📝 Post Details:`);
+      console.log(`   Title: ${result.title}`);
+      console.log(`   Slug: ${result.slug}`);
+      console.log(`   Words: ${result.wordCount}`);
+
+      // Action that would be taken
+      if (existingPostId) {
+        console.log(`\n🔄 Action: UPDATE existing post (ID: ${existingPostId})`);
+      } else {
+        console.log(`\n➕ Action: CREATE new ${status} post`);
+        console.log(`   ⚠️  This will create a new post in WordPress`);
+      }
+
+      // Image upload plan
+      const images = extractLocalImages(markdown, mdDir);
+      if (images.length > 0) {
+        const sidecar = loadSidecar(mdPath);
+        const toUpload = getImagesToUpload(images, sidecar, siteName || site.url);
+
+        console.log(`\n🖼️  Image Plan:`);
+        console.log(`   Total images in post: ${images.length}`);
+        console.log(`   Already uploaded (in sidecar): ${images.length - toUpload.length}`);
+        console.log(`   Would upload: ${toUpload.length}`);
+
+        if (toUpload.length > 0) {
+          console.log(`\n   Images to upload:`);
+          for (const img of toUpload) {
+            const exists = fs.existsSync(img.absolutePath);
+            console.log(`   - ${img.markdownPath} ${exists ? '✓' : '❌ NOT FOUND'}`);
+          }
+        }
+
+        // Show existing sidecar URLs
+        if (sidecar?.uploaded) {
+          const existingCount = Object.keys(sidecar.uploaded).length;
+          if (existingCount > 0) {
+            console.log(`\n   Already uploaded (will reuse):`);
+            for (const img of images) {
+              const existing = sidecar.uploaded[img.markdownPath];
+              if (existing?.url) {
+                console.log(`   - ${img.markdownPath} → ${existing.url}`);
+              }
+            }
+          }
+        }
+      } else {
+        console.log(`\n🖼️  Image Plan: No images in post`);
+      }
+
+      console.log(`\n${'─'.repeat(50)}`);
+      console.log(`To execute: remove --dryrun flag`);
+
     } catch (error) {
       console.error(`Error: ${error.message}`);
       process.exit(1);
     }
     return;
+  }
+
+  // SAFEGUARD: Confirmation prompt before creating new posts
+  const skipConfirm = options.flags.yes === true;
+
+  if (!update && !skipConfirm) {
+    console.log(`\n⚠️  CREATING NEW POST`);
+    console.log(`   This will create a new ${status} post in WordPress.`);
+    console.log(`   If you intended to update an existing post, cancel and use --update.\n`);
+
+    const answer = await prompt('Continue? (y/N): ');
+    if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
+      console.log('Aborted.');
+      process.exit(0);
+    }
   }
 
   try {

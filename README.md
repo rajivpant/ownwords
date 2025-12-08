@@ -408,6 +408,65 @@ ownwords publish-all ./content/articles/ --status=draft
 ownwords publish-all ./content/articles/ --update --status=publish
 ```
 
+### Publishing Safeguards
+
+ownwords includes several safeguards to prevent common mistakes:
+
+**1. Auto-detect existing posts**
+
+If your markdown file has a `wordpress.post_id` in its front matter (saved from a previous publish), ownwords automatically enables `--update` mode to prevent creating duplicate drafts:
+
+```
+⚠️  SAFEGUARD: Found existing WordPress post_id: 6855
+   Automatically enabling --update mode to prevent duplicate draft creation.
+```
+
+**2. Confirmation before creating new posts**
+
+When creating a new post (not updating), ownwords prompts for confirmation:
+
+```
+⚠️  CREATING NEW POST
+   This will create a new draft post in WordPress.
+   If you intended to update an existing post, cancel and use --update.
+
+Continue? (y/N):
+```
+
+Use `--yes` to skip this prompt for automation.
+
+**3. Enhanced dry-run**
+
+The `--dryrun` flag shows a detailed preview including:
+- Post details (title, slug, word count)
+- Action that would be taken (UPDATE vs CREATE)
+- Image upload plan (which images would be uploaded, which are already cached)
+- Existing sidecar URLs that will be reused
+
+```bash
+# Always preview before publishing
+ownwords publish ./content/my-article.md --dryrun
+```
+
+**4. Image upload tracking**
+
+A sidecar file (`my-article.images.json`) tracks:
+- Which images have been uploaded
+- Their WordPress media IDs and URLs
+- File hashes to detect changes
+
+This prevents re-uploading unchanged images and ensures image URLs remain stable.
+
+**Best practice workflow:**
+
+```bash
+# 1. Preview first
+ownwords publish ./content/my-article.md --dryrun
+
+# 2. Then publish
+ownwords publish ./content/my-article.md
+```
+
 ### Environment Variables
 
 For CI/CD environments, use environment variables instead of the config file:
