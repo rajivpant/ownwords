@@ -106,6 +106,7 @@ Batch Options:
   --skip-fetch                   Skip fetching, only convert existing HTML
   --api                          Use WordPress REST API instead of HTML scraping
   --site=<name>                  WordPress site to use (for --api mode)
+  --force                        Overwrite existing files (default: error on conflict)
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
@@ -461,7 +462,8 @@ async function cmdBatch(options) {
       const batchResults = await fetchViaApiMultiple(urls, outputDir, {
         site: options.flags.site,
         type: options.flags.type || 'posts',
-        silent: options.silent
+        silent: options.silent,
+        force: options.flags.force === true
       });
 
       // Summary
@@ -524,6 +526,13 @@ async function cmdBatch(options) {
     const mdPath = path.join(outputDir, `${slug}.md`);
 
     try {
+      // Check for existing file (collision detection)
+      if (fs.existsSync(mdPath) && !options.flags.force) {
+        console.error(`  File already exists: ${mdPath}. Use --force to overwrite.`);
+        results.push({ url, slug, success: false, error: 'File exists (use --force to overwrite)' });
+        continue;
+      }
+
       // Fetch if not skipping
       if (!options.flags.skipFetch) {
         fetchArticle(url, htmlPath, { silent: options.silent });
