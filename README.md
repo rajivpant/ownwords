@@ -88,6 +88,26 @@ ownwords fetch my-article-slug --api --site=myblog
 ownwords fetch https://example.com/blog/2025/01/01/my-article/ ./raw/my-article.html
 ```
 
+**Date-prefixed filenames (Jekyll/Hugo convention):**
+
+By default, fetched files use date-prefixed filenames like `2025-01-01-my-article.md`, following Jekyll and Hugo conventions. This prevents filename collisions when articles share the same slug across different dates.
+
+```bash
+# REST API mode: date comes from API response
+# Creates: 2025-01-01-my-article.md
+ownwords fetch https://example.com/my-article/ --api
+
+# Disable date prefix: creates my-article.md
+ownwords fetch https://example.com/my-article/ --api --no-date-prefix
+
+# HTML scraping mode: date extracted from URL if present
+# URL with date (/2025/01/01/slug/) → 2025-01-01-my-article.md
+# URL without date (/my-article/) → my-article.md (fallback)
+ownwords fetch https://example.com/blog/2025/01/01/my-article/
+```
+
+**Note:** REST API mode (`--api`) is recommended as it gets the publication date directly from WordPress regardless of URL structure. HTML scraping mode can only extract dates from URLs that contain them.
+
 **REST API mode benefits:**
 
 - Full categories and tags (names, slugs, IDs)

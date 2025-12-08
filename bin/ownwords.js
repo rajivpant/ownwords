@@ -20,7 +20,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { fetchArticle, extractSlugFromUrl } = require('../lib/fetch');
+const { fetchArticle, extractSlugFromUrl, extractDateFromUrl } = require('../lib/fetch');
 const { convertFile } = require('../lib/convert');
 const { verifyConversion, verifyBatch } = require('../lib/verify');
 const { exportToWordPress } = require('../lib/export');
@@ -33,7 +33,7 @@ const {
   getConfigPath
 } = require('../lib/config');
 const { WpClient } = require('../lib/wp-api');
-const { fetchViaApi, fetchViaApiMultiple } = require('../lib/fetch-api');
+const { fetchViaApi, fetchViaApiMultiple, generateDatePrefixedFilename, generateHierarchicalPath } = require('../lib/fetch-api');
 const {
   compareFiles,
   compareBatch,
@@ -85,10 +85,12 @@ Options:
   --verbose                      Show detailed output
 
 Fetch Options:
-  --output-dir=<dir>             Output directory (default: ./raw)
+  --output-dir=<dir>             Output directory (default: ./raw or ./content for --hierarchical)
   --api                          Use WordPress REST API instead of HTML scraping
   --site=<name>                  WordPress site to use (for --api mode)
   --type=<type>                  Content type: posts (default) or pages
+  --hierarchical                 Use hierarchical directory structure (posts/YYYY/MM/DD-slug/)
+  --no-date-prefix               Don't add date prefix to filename (flat mode only)
 
 Convert Options:
   --slug=<slug>                  Override the slug
@@ -101,12 +103,14 @@ Verify Options:
 
 Batch Options:
   --raw-dir=<dir>                Directory for HTML files (default: ./raw)
-  --output-dir=<dir>             Directory for Markdown files (default: ./content/articles)
+  --output-dir=<dir>             Directory for Markdown files (default: ./content/articles or ./content for --hierarchical)
   --verify                       Verify after converting
   --skip-fetch                   Skip fetching, only convert existing HTML
   --api                          Use WordPress REST API instead of HTML scraping
   --site=<name>                  WordPress site to use (for --api mode)
   --force                        Overwrite existing files (default: error on conflict)
+  --hierarchical                 Use hierarchical directory structure (posts/YYYY/MM/DD-slug/)
+  --no-date-prefix               Don't add date prefix to filename (flat mode only)
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
@@ -205,13 +209,15 @@ async function cmdFetch(options) {
 
   // REST API mode
   if (options.flags.api) {
-    const outputDir = options.flags.outputdir || './content/articles';
+    const outputDir = options.flags.outputdir || (options.flags.hierarchical ? './content' : './content/articles');
 
     try {
       const result = await fetchViaApi(urlOrSlug, outputDir, {
         site: options.flags.site,
         type: options.flags.type || 'posts',
-        silent: options.silent
+        silent: options.silent,
+        noDatePrefix: options.flags.nodateprefix === true,
+        hierarchical: options.flags.hierarchical === true
       });
 
       if (!options.silent) {
@@ -438,7 +444,7 @@ async function cmdBatch(options) {
   }
 
   const rawDir = options.flags.rawdir || './raw';
-  const outputDir = options.flags.outputdir || './content/articles';
+  const outputDir = options.flags.outputdir || (options.flags.hierarchical ? './content' : './content/articles');
   const useApi = options.flags.api === true;
 
   console.log('='.repeat(60));
@@ -463,7 +469,9 @@ async function cmdBatch(options) {
         site: options.flags.site,
         type: options.flags.type || 'posts',
         silent: options.silent,
-        force: options.flags.force === true
+        force: options.flags.force === true,
+        noDatePrefix: options.flags.nodateprefix === true,
+        hierarchical: options.flags.hierarchical === true
       });
 
       // Summary
@@ -518,12 +526,17 @@ async function cmdBatch(options) {
       continue;
     }
 
+    // Extract date from URL for date-prefixed filename (Jekyll/Hugo convention)
+    const dateFromUrl = extractDateFromUrl(url);
+    const useNoDatePrefix = options.flags.nodateprefix === true;
+    const filename = (useNoDatePrefix || !dateFromUrl) ? slug : generateDatePrefixedFilename(slug, dateFromUrl);
+
     console.log(`\n${'─'.repeat(60)}`);
-    console.log(`Processing: ${slug}`);
+    console.log(`Processing: ${filename}`);
     console.log('─'.repeat(60));
 
     const htmlPath = path.join(rawDir, `${slug}.html`);
-    const mdPath = path.join(outputDir, `${slug}.md`);
+    const mdPath = path.join(outputDir, `${filename}.md`);
 
     try {
       // Check for existing file (collision detection)
@@ -562,6 +575,7 @@ async function cmdBatch(options) {
       results.push({
         url,
         slug,
+        filename,
         success: true,
         ...convertResult,
         verification
@@ -588,7 +602,7 @@ async function cmdBatch(options) {
   if (successful.length > 0) {
     console.log('\nConverted:');
     successful.forEach(r => {
-      console.log(`  ✅ ${r.slug} (${r.wordCount} words)`);
+      console.log(`  ✅ ${r.filename || r.slug} (${r.wordCount} words)`);
     });
   }
 

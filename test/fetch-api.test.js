@@ -9,7 +9,9 @@ const {
   extractSlugFromUrl,
   extractDomain,
   findSiteByDomain,
-  generateEnrichedFrontMatter
+  generateEnrichedFrontMatter,
+  generateDatePrefixedFilename,
+  generateHierarchicalPath
 } = require('../lib/fetch-api');
 
 describe('extractSlugFromUrl', () => {
@@ -41,6 +43,40 @@ describe('extractSlugFromUrl', () => {
   it('handles empty trailing path', () => {
     const slug = extractSlugFromUrl('https://example.com/');
     assert.strictEqual(slug, '');
+  });
+});
+
+describe('generateDatePrefixedFilename', () => {
+  it('generates date-prefixed filename from ISO date string', () => {
+    const result = generateDatePrefixedFilename('my-article', '2025-01-15');
+    assert.strictEqual(result, '2025-01-15-my-article');
+  });
+
+  it('generates date-prefixed filename from full ISO datetime', () => {
+    const result = generateDatePrefixedFilename('my-article', '2025-12-07T15:30:00');
+    assert.strictEqual(result, '2025-12-07-my-article');
+  });
+
+  it('generates date-prefixed filename from ISO datetime with timezone', () => {
+    const result = generateDatePrefixedFilename('my-article', '2025-12-07T15:30:00Z');
+    assert.strictEqual(result, '2025-12-07-my-article');
+  });
+
+  it('uses current date when date is null', () => {
+    const result = generateDatePrefixedFilename('my-article', null);
+    const today = new Date().toISOString().substring(0, 10);
+    assert.strictEqual(result, `${today}-my-article`);
+  });
+
+  it('uses current date when date is undefined', () => {
+    const result = generateDatePrefixedFilename('my-article', undefined);
+    const today = new Date().toISOString().substring(0, 10);
+    assert.strictEqual(result, `${today}-my-article`);
+  });
+
+  it('handles slugs with numbers and hyphens', () => {
+    const result = generateDatePrefixedFilename('my-article-2024-v2', '2025-01-15');
+    assert.strictEqual(result, '2025-01-15-my-article-2024-v2');
   });
 });
 
@@ -235,6 +271,65 @@ describe('generateEnrichedFrontMatter', () => {
     const frontMatter = generateEnrichedFrontMatter(normalized);
 
     assert.ok(frontMatter.includes('synced_at:'));
+  });
+});
+
+
+describe('generateHierarchicalPath', () => {
+  it('generates posts path with date hierarchy', () => {
+    const result = generateHierarchicalPath('posts', 'my-article', '2025-12-07');
+    // Should be posts/2025/12/07-my-article
+    assert.ok(result.includes('posts'));
+    assert.ok(result.includes('2025'));
+    assert.ok(result.includes('12'));
+    assert.ok(result.includes('07-my-article'));
+  });
+
+  it('generates posts path from full ISO datetime', () => {
+    const result = generateHierarchicalPath('posts', 'my-article', '2025-01-15T10:30:00Z');
+    assert.ok(result.includes('posts'));
+    assert.ok(result.includes('2025'));
+    assert.ok(result.includes('01'));
+    assert.ok(result.includes('15-my-article'));
+  });
+
+  it('uses current date when date is null for posts', () => {
+    const result = generateHierarchicalPath('posts', 'my-article', null);
+    const today = new Date();
+    const year = today.getFullYear().toString();
+    assert.ok(result.includes('posts'));
+    assert.ok(result.includes(year));
+  });
+
+  it('generates simple pages path without dates', () => {
+    const result = generateHierarchicalPath('pages', 'about', null);
+    assert.ok(result.includes('pages'));
+    assert.ok(result.includes('about'));
+    assert.ok(!result.includes('2025')); // No date components
+  });
+
+  it('generates hierarchical pages path with parent', () => {
+    const result = generateHierarchicalPath('pages', 'pricing', null, 'services');
+    assert.ok(result.includes('pages'));
+    assert.ok(result.includes('services'));
+    assert.ok(result.includes('pricing'));
+  });
+
+  it('handles page without parent slug', () => {
+    const result = generateHierarchicalPath('pages', 'contact', '2025-01-15');
+    // Pages should NOT include date even if provided
+    assert.ok(result.includes('pages'));
+    assert.ok(result.includes('contact'));
+    assert.ok(!result.includes('2025'));
+    assert.ok(!result.includes('01'));
+  });
+
+  it('handles slugs with special characters', () => {
+    const result = generateHierarchicalPath('posts', 'my-article-2024-v2', '2025-03-20');
+    assert.ok(result.includes('posts'));
+    assert.ok(result.includes('2025'));
+    assert.ok(result.includes('03'));
+    assert.ok(result.includes('20-my-article-2024-v2'));
   });
 });
 
