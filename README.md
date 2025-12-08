@@ -354,9 +354,28 @@ ownwords publish ./content/articles/my-article.md --update
 # Publish to specific site
 ownwords publish ./content/articles/my-article.md --site=myblog
 
+# Publish with a specific date (backdating)
+ownwords publish ./content/articles/my-article.md --date="2025-12-07T23:00:00"
+
 # Dry run (preview without publishing)
-ownwords publish ./content/articles/my-article.md --dry-run
+ownwords publish ./content/articles/my-article.md --dryrun
 ```
+
+### Image Upload
+
+When your markdown includes local images, ownwords automatically uploads them to WordPress:
+
+```markdown
+![My photo](./my-article/photo.jpg)
+```
+
+**Image handling:**
+
+- Local images are automatically uploaded to WordPress media library
+- Image URLs are rewritten in the published post
+- Alt text from markdown is preserved
+- An image tracking sidecar file (`my-article.images.json`) prevents re-uploading unchanged images
+- After publishing, WordPress metadata (post_id, category_ids, etc.) is saved back to the markdown front matter
 
 ### Batch Publish
 
@@ -393,12 +412,14 @@ const client = new WpClient({
 const result = await client.testConnection();
 console.log(result.success ? 'Connected!' : result.error);
 
-// Publish markdown file
+// Publish markdown file (with automatic image upload)
 const post = await client.publishMarkdown('./content/my-article.md', {
   status: 'publish',
-  update: true  // Update if exists
+  update: true,  // Update if exists
+  date: '2025-12-07T23:00:00'  // Optional: backdate the post
 });
 console.log(`Published: ${post.link}`);
+console.log(`Images uploaded: ${post.imagesUploaded}`);
 
 // Create post directly
 const newPost = await client.createPost({

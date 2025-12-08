@@ -39,6 +39,7 @@ const {
   compareBatch,
   generateReport
 } = require('../lib/compare');
+const { updateFrontMatterWithWordPress } = require('../lib/image-utils');
 
 const VERSION = require('../package.json').version;
 
@@ -110,7 +111,8 @@ Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
   --status=<status>              Post status: draft, publish, future, private (default: draft)
   --update                       Update existing post if found by slug
-  --dry-run                      Show what would be published without publishing
+  --date=<iso-date>              Publish date in ISO 8601 format (e.g., 2025-12-07T23:00:00)
+  --dryrun                       Show what would be published without publishing
 
 Export Options:
   --include-wrapper              Add WordPress block editor comments
@@ -840,12 +842,16 @@ async function cmdPublish(options) {
   const status = options.flags.status || 'draft';
   const update = options.flags.update === true;
   const dryRun = options.flags.dryrun === true;
+  const publishDate = options.flags.date; // ISO 8601 format, e.g., "2025-12-07T23:00:00"
 
   if (!options.silent) {
     console.log(`Publishing to: ${site.url}`);
     console.log(`  File: ${mdPath}`);
     console.log(`  Status: ${status}`);
     console.log(`  Update existing: ${update}`);
+    if (publishDate) {
+      console.log(`  Publish date: ${publishDate}`);
+    }
     if (dryRun) {
       console.log('  DRY RUN - no changes will be made');
     }
@@ -868,13 +874,32 @@ async function cmdPublish(options) {
 
   try {
     const client = new WpClient(site);
-    const result = await client.publishMarkdown(mdPath, { status, update });
+    const result = await client.publishMarkdown(mdPath, {
+      status,
+      update,
+      date: publishDate,
+      siteName: siteName || site.url,
+      silent: options.silent
+    });
 
     console.log(`\n✅ ${result.action === 'created' ? 'Published' : 'Updated'}!`);
     console.log(`   Post ID: ${result.postId}`);
     console.log(`   Slug: ${result.slug}`);
     console.log(`   Status: ${result.status}`);
     console.log(`   URL: ${result.link}`);
+    if (result.imagesUploaded > 0) {
+      console.log(`   Images uploaded: ${result.imagesUploaded}`);
+    }
+
+    // Save WordPress metadata back to the markdown file
+    try {
+      updateFrontMatterWithWordPress(mdPath, result);
+      if (!options.silent) {
+        console.log(`   Metadata saved to: ${path.basename(mdPath)}`);
+      }
+    } catch (metaError) {
+      console.error(`   Warning: Failed to save metadata: ${metaError.message}`);
+    }
   } catch (error) {
     console.error(`\n❌ Publish failed: ${error.message}`);
     process.exit(1);

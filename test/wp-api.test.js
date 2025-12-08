@@ -168,5 +168,82 @@ describe('WpClient', () => {
       });
       assert.strictEqual(typeof client.syncMarkdown, 'function');
     });
+
+    it('has uploadMedia method', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(typeof client.uploadMedia, 'function');
+    });
+
+    it('has uploadMediaBatch method', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(typeof client.uploadMediaBatch, 'function');
+    });
+  });
+
+  describe('_getMimeType', () => {
+    let client;
+
+    it('returns correct MIME type for jpg', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('photo.jpg'), 'image/jpeg');
+      assert.strictEqual(client._getMimeType('photo.jpeg'), 'image/jpeg');
+    });
+
+    it('returns correct MIME type for png', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('image.png'), 'image/png');
+    });
+
+    it('returns correct MIME type for gif', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('animation.gif'), 'image/gif');
+    });
+
+    it('returns correct MIME type for webp', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('modern.webp'), 'image/webp');
+    });
+
+    it('returns octet-stream for unknown extension', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('file.xyz'), 'application/octet-stream');
+    });
+
+    it('handles uppercase extensions', () => {
+      client = new WpClient({
+        url: 'https://example.com',
+        username: 'testuser',
+        appPassword: 'secret'
+      });
+      assert.strictEqual(client._getMimeType('PHOTO.JPG'), 'image/jpeg');
+    });
   });
 });
