@@ -97,6 +97,39 @@ Some text
 
       assert.strictEqual(images[0].absolutePath, '/content/articles/slug/image.jpg');
     });
+
+    it('extracts image path excluding title/caption', () => {
+      const markdown = '![Alt text](./image.jpg "This is the caption")';
+      const images = extractLocalImages(markdown, '/test/dir');
+
+      assert.strictEqual(images.length, 1);
+      assert.strictEqual(images[0].markdownPath, './image.jpg');
+      assert.strictEqual(images[0].filename, 'image.jpg');
+      assert.strictEqual(images[0].altText, 'Alt text');
+    });
+
+    it('handles image with title containing special chars', () => {
+      const markdown = '![Alt](./photo.jpeg "Caption with special chars!")';
+      const images = extractLocalImages(markdown, '/test');
+
+      assert.strictEqual(images.length, 1);
+      assert.strictEqual(images[0].markdownPath, './photo.jpeg');
+    });
+
+    it('handles multiple images with and without titles', () => {
+      const markdown = `
+![First](./img1.png "Caption one")
+Some text
+![Second](./img2.jpg)
+![Third](./img3.gif "Caption three")
+`;
+      const images = extractLocalImages(markdown, '/test');
+
+      assert.strictEqual(images.length, 3);
+      assert.strictEqual(images[0].markdownPath, './img1.png');
+      assert.strictEqual(images[1].markdownPath, './img2.jpg');
+      assert.strictEqual(images[2].markdownPath, './img3.gif');
+    });
   });
 
   describe('escapeRegex', () => {
