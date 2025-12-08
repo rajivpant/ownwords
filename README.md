@@ -41,6 +41,7 @@ Without tooling like ownwords, batch content operations on WordPress sites requi
 - **Dual publishing** — Maintain content on both WordPress and a static site (Cloudflare Pages, Netlify, GitHub Pages)
 - **Content backup** — Keep version-controlled Markdown files as the source of truth, with WordPress as a publishing target
 - **Platform migration** — Export content from WordPress to other CMS platforms or static site generators
+- **Headless CMS architecture** — Use local Markdown files as a content source for multiple frontends (websites, mobile apps, etc.), with WordPress as one of many publishing targets
 
 ### AI-Assisted Editorial Operations
 
