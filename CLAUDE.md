@@ -58,6 +58,29 @@ ownwords export <md>              # Export to WordPress HTML
 
 Run `ownwords --help` for full options including `--hierarchical`, `--output-dir`, `--api`, etc.
 
+## Image Downloading (fetch --api)
+
+By default, `fetch --api` downloads all images locally and rewrites URLs to local paths. This makes local files self-sufficient for testing and ensures you own your content.
+
+**Features:**
+- **Smart caching**: Only downloads if file doesn't exist or has changed (compares Content-Length)
+- **Size deduplication**: WordPress/Jetpack CDN serves multiple sizes via query params (`?resize=1024x1024`). Ownwords picks the highest quality version.
+- **URL rewriting**: All image URLs in markdown body AND `featured_image` in front matter are rewritten to local relative paths (`./image.png`)
+- **Sidecar tracking**: Creates `index.images.json` to track original URLs → local filenames (used by publish to avoid re-uploading)
+
+**Flags:**
+- `--no-images` — Skip image downloading, keep remote WordPress URLs
+
+**Example output:**
+```
+📷 Found 20 images to download...
+  ✓ Unchanged: image1.png (412.1 KB)
+  ✓ Unchanged: image2.png (855.9 KB)
+📷 Images: 2 unchanged
+```
+
+The 20 URLs were deduplicated to 2 unique images (different size variants of same image).
+
 ## Library Usage
 
 ```javascript
