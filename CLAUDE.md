@@ -1,37 +1,50 @@
 # Claude Code Context: ownwords
 
-## Repository: ownwords (PUBLIC)
+## Repository: ownwords (PUBLIC, open source)
 
 Own your words. Open source toolkit for authors who want to own their words. Bi-directional WordPress sync, local Markdown editing, batch AI-assisted editorial operations, and dual publishing to both WordPress and static sites. Your content, your files, your control.
 
 ## Purpose
 
-This is a **standalone npm package** that can be used with any WordPress site.
-It is NOT tied to any specific website project.
+This is a **standalone npm package** published on npm. It can be used with any WordPress site by anyone.
 
-## Repository Location
+## CRITICAL: Fetching Articles to Target Sites
 
-`~/projects/my-projects/ownwords/`
+**When asked to fetch an article, you MUST:**
 
-## Usage with Other Projects
+1. **ASK the user which local directory** the article should go to — never assume
+2. **Check the target site's existing structure** before fetching:
+   ```bash
+   find /path/to/target-site/content -name "*.md" | head -5
+   ```
+3. **Read the target site's CLAUDE.md** if it exists — it will document that site's content structure
+4. **Use the appropriate flags** based on what you learned (e.g., `--hierarchical` if the site uses hierarchical structure)
 
-ownwords can be used as a dependency or development tool for any website:
-- synthesis-coding-site
-- rajiv-site
-- ragbot-site
-- ragenie-site
-- Any WordPress-to-static-site workflow
+### Why ASK First?
 
-## Git Operations
+- Users may have multiple local repos for different purposes
+- The source URL does NOT determine the target folder — the user's intent does
+- Articles can be published to multiple sites (many-to-many publishing)
+- Only the user knows their content organization
 
-**IMPORTANT**: This is a separate repository from any website projects.
+### Common Mistakes to AVOID
 
-Before any git commands, ensure you are in the correct directory:
-```bash
-cd ~/projects/my-projects/ownwords
-```
+1. **Never assume the target directory** — always ask or confirm with the user
+2. **Never use `~` in shell arguments** — shells don't expand `~` in all contexts; use `$HOME` or full paths
+3. **Never hardcode paths** — paths vary by user, machine, and operating system
+4. **Always check target structure first** — different sites use different conventions
 
-Do NOT commit ownwords changes to website repos or vice versa.
+## Publishing to WordPress
+
+The `ownwords publish` command defaults to `publish` status (not draft). This means:
+- New posts are published immediately
+- Updated posts remain published
+
+Use `--status=draft` only if you explicitly want an unpublished draft.
+
+**Before publishing, ALWAYS:**
+1. Run with `--dryrun` first to verify it shows "UPDATE existing post" (for updates)
+2. Verify the post_id in front matter matches the WordPress post (for updates)
 
 ## CLI Commands
 
@@ -42,6 +55,8 @@ ownwords verify <html> <md>       # Verify conversion
 ownwords batch <urls-file>        # Batch convert
 ownwords export <md>              # Export to WordPress HTML
 ```
+
+Run `ownwords --help` for full options including `--hierarchical`, `--output-dir`, `--api`, etc.
 
 ## Library Usage
 
@@ -60,15 +75,12 @@ await agent.findAndReplace({ pattern: /old/g, replacement: 'new' });
 ## Development
 
 ```bash
-# Install dependencies (none currently)
-npm install
+npm install           # Install dependencies
+npm link              # Link for local CLI testing
+npm test              # Run tests
 
-# Link for local CLI testing
-npm link
-
-# Test CLI
-ownwords --version
-ownwords --help
+ownwords --version    # Verify CLI works
+ownwords --help       # See all commands and options
 ```
 
 ## Project Structure
@@ -89,3 +101,11 @@ ownwords/
 ├── LICENSE               # MIT
 └── CLAUDE.md             # This file
 ```
+
+## Git Operations
+
+This is a standalone repository. If you're using ownwords alongside other site repositories, ensure you're in the correct directory before any git commands.
+
+## Contributing
+
+This is open source software (MIT license). Contributions are welcome.

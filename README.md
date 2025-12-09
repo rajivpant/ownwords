@@ -402,10 +402,10 @@ When your markdown includes local images, ownwords automatically uploads them to
 
 ```bash
 # Publish all markdown files in a directory
-ownwords publish-all ./content/articles/ --status=draft
+ownwords publish-all ./content/articles/
 
-# Update all existing posts
-ownwords publish-all ./content/articles/ --update --status=publish
+# Update all existing posts (redundant --status=publish since that's the default)
+ownwords publish-all ./content/articles/ --update
 ```
 
 ### Publishing Safeguards
@@ -427,7 +427,7 @@ When creating a new post (not updating), ownwords prompts for confirmation:
 
 ```
 ⚠️  CREATING NEW POST
-   This will create a new draft post in WordPress.
+   This will create a new published post in WordPress.
    If you intended to update an existing post, cancel and use --update.
 
 Continue? (y/N):

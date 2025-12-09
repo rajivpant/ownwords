@@ -120,7 +120,7 @@ Batch Options:
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
-  --status=<status>              Post status: draft, publish, future, private (default: draft)
+  --status=<status>              Post status: publish, draft, future, private (default: publish)
   --update                       Update existing post if found by slug
   --date=<iso-date>              Publish date in ISO 8601 format (e.g., 2025-12-07T23:00:00)
   --dryrun                       Show what would be published without publishing
@@ -160,7 +160,7 @@ Examples:
   ownwords config-wp add myblog https://myblog.com --username=author
 
   # Publish to WordPress
-  ownwords publish ./content/articles/my-article.md --status=draft
+  ownwords publish ./content/articles/my-article.md --status=draft  # Only if you explicitly want a draft
   ownwords publish ./content/articles/my-article.md --status=publish --update
 `);
 }
@@ -874,7 +874,7 @@ async function cmdPublish(options) {
     process.exit(1);
   }
 
-  const status = options.flags.status || 'draft';
+  const status = options.flags.status || 'publish';
   let update = options.flags.update === true;
   const dryRun = options.flags.dryrun === true;
   const publishDate = options.flags.date; // ISO 8601 format, e.g., "2025-12-07T23:00:00"
@@ -1059,7 +1059,7 @@ async function cmdPublishAll(options) {
     process.exit(1);
   }
 
-  const status = options.flags.status || 'draft';
+  const status = options.flags.status || 'publish';
   const update = options.flags.update === true;
   const dryRun = options.flags.dryrun === true;
 
