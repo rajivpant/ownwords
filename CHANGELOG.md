@@ -111,6 +111,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.4] - 2025-12-09
+
+### Added
+
+- **Featured image downloading** - When using `fetch --api`, featured images are now downloaded alongside content images. The `featured_image` field in YAML front matter is automatically rewritten to use the local path (e.g., `./featured-image.jpg`) instead of the remote URL. This makes fetched articles fully self-contained with all images stored locally.
+
+- **`featuredImageLocalPath` in fetch results** - The `fetchViaApi()` function now returns `featuredImageLocalPath` in its result object, indicating the local path of the downloaded featured image.
+
+---
+
 ## [1.4.3] - 2025-12-09
 
 ### Fixed
