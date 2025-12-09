@@ -12,7 +12,9 @@ const {
   generateEnrichedFrontMatter,
   generateDatePrefixedFilename,
   generateHierarchicalPath,
-  normalizeWordPressImageUrl
+  normalizeWordPressImageUrl,
+  rewriteImageUrls,
+  getImageBaseKey
 } = require('../lib/fetch-api');
 
 describe('extractSlugFromUrl', () => {
@@ -596,5 +598,142 @@ describe('normalizeWordPressImageUrl', () => {
     const siteUrl = 'https://rajiv.com';
     const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
     assert.strictEqual(result, 'https://rajiv.com/wp-content/uploads/2023/10/image.png');
+  });
+});
+
+describe('getImageBaseKey', () => {
+  it('extracts base key from simple URL (includes origin)', () => {
+    const url = 'https://example.com/wp-content/uploads/2024/01/image.jpg';
+    const baseKey = getImageBaseKey(url);
+    assert.strictEqual(baseKey, 'https://example.com/wp-content/uploads/2024/01/image.jpg');
+  });
+
+  it('strips query parameters from URL', () => {
+    const url = 'https://example.com/wp-content/uploads/2024/01/image.jpg?resize=800x600';
+    const baseKey = getImageBaseKey(url);
+    assert.strictEqual(baseKey, 'https://example.com/wp-content/uploads/2024/01/image.jpg');
+  });
+
+  it('strips WordPress size suffixes like -1024x768', () => {
+    const url = 'https://example.com/wp-content/uploads/2024/01/image-1024x768.jpg';
+    const baseKey = getImageBaseKey(url);
+    assert.strictEqual(baseKey, 'https://example.com/wp-content/uploads/2024/01/image.jpg');
+  });
+
+  it('strips WordPress -scaled suffix', () => {
+    const url = 'https://example.com/wp-content/uploads/2024/01/image-scaled.jpg';
+    const baseKey = getImageBaseKey(url);
+    assert.strictEqual(baseKey, 'https://example.com/wp-content/uploads/2024/01/image.jpg');
+  });
+
+  it('handles Jetpack CDN URLs', () => {
+    const url = 'https://i0.wp.com/example.com/wp-content/uploads/2024/01/image.jpg?resize=800';
+    const baseKey = getImageBaseKey(url);
+    // Jetpack CDN URL - the origin becomes i0.wp.com
+    assert.ok(baseKey.includes('/example.com/wp-content/uploads/2024/01/image.jpg'));
+  });
+
+  it('handles multiple size patterns in same URL', () => {
+    const url = 'https://example.com/wp-content/uploads/2024/01/my-photo-2024-300x200.png';
+    const baseKey = getImageBaseKey(url);
+    assert.strictEqual(baseKey, 'https://example.com/wp-content/uploads/2024/01/my-photo-2024.png');
+  });
+});
+
+describe('rewriteImageUrls', () => {
+  it('rewrites markdown image syntax ![alt](url)', () => {
+    const markdown = '![My Photo](https://example.com/wp-content/uploads/2024/01/photo.jpg)';
+    const urlMap = {
+      'https://example.com/wp-content/uploads/2024/01/photo.jpg': 'photo.jpg'
+    };
+    const result = rewriteImageUrls(markdown, urlMap);
+    assert.strictEqual(result, '![My Photo](./photo.jpg)');
+  });
+
+  it('rewrites multiple images in markdown', () => {
+    const markdown = `![First](https://example.com/uploads/a.jpg)
+
+Some text
+
+![Second](https://example.com/uploads/b.jpg)`;
+    const urlMap = {
+      'https://example.com/uploads/a.jpg': 'a.jpg',
+      'https://example.com/uploads/b.jpg': 'b.jpg'
+    };
+    const result = rewriteImageUrls(markdown, urlMap);
+    assert.ok(result.includes('![First](./a.jpg)'));
+    assert.ok(result.includes('![Second](./b.jpg)'));
+  });
+
+  it('rewrites HTML img src attributes', () => {
+    const html = '<img src="https://example.com/uploads/photo.jpg" alt="Photo">';
+    const urlMap = {
+      'https://example.com/uploads/photo.jpg': 'photo.jpg'
+    };
+    const result = rewriteImageUrls(html, urlMap);
+    assert.strictEqual(result, '<img src="./photo.jpg" alt="Photo">');
+  });
+
+  it('rewrites featured_image in YAML front matter', () => {
+    const frontMatter = `---
+title: "My Article"
+featured_image: "https://example.com/wp-content/uploads/2024/01/featured.jpg"
+featured_image_alt: "A beautiful image"
+---`;
+    const urlMap = {
+      'https://example.com/wp-content/uploads/2024/01/featured.jpg': 'featured.jpg'
+    };
+    const result = rewriteImageUrls(frontMatter, urlMap);
+    assert.ok(result.includes('featured_image: "./featured.jpg"'));
+    // featured_image_alt should NOT be changed (it's not a URL)
+    assert.ok(result.includes('featured_image_alt: "A beautiful image"'));
+  });
+
+  it('rewrites featured_image with size variants', () => {
+    const frontMatter = `---
+featured_image: "https://example.com/wp-content/uploads/2024/01/image-1024x768.jpg"
+---`;
+    const urlMap = {
+      'https://example.com/wp-content/uploads/2024/01/image.jpg': 'image.jpg'
+    };
+    const result = rewriteImageUrls(frontMatter, urlMap);
+    // Should match by base key, not exact URL
+    assert.ok(result.includes('featured_image: "./image.jpg"'));
+  });
+
+  it('rewrites linked images [![alt](img)](link)', () => {
+    const markdown = '[![Thumbnail](https://example.com/thumb-300x200.jpg)](https://example.com/full.jpg)';
+    const urlMap = {
+      'https://example.com/thumb.jpg': 'thumb.jpg',
+      'https://example.com/full.jpg': 'full.jpg'
+    };
+    const result = rewriteImageUrls(markdown, urlMap);
+    assert.ok(result.includes('./thumb.jpg'));
+    assert.ok(result.includes('./full.jpg'));
+  });
+
+  it('does not rewrite non-image URLs in links', () => {
+    const markdown = '[Read more](https://example.com/article/)';
+    const urlMap = {
+      'https://example.com/image.jpg': 'image.jpg'
+    };
+    const result = rewriteImageUrls(markdown, urlMap);
+    // Link should remain unchanged
+    assert.strictEqual(result, markdown);
+  });
+
+  it('handles empty urlMap gracefully', () => {
+    const markdown = '![Photo](https://example.com/photo.jpg)';
+    const result = rewriteImageUrls(markdown, {});
+    assert.strictEqual(result, markdown);
+  });
+
+  it('preserves image alt text during rewrite', () => {
+    const markdown = '![A beautiful sunset over the ocean](https://example.com/sunset.jpg)';
+    const urlMap = {
+      'https://example.com/sunset.jpg': 'sunset.jpg'
+    };
+    const result = rewriteImageUrls(markdown, urlMap);
+    assert.strictEqual(result, '![A beautiful sunset over the ocean](./sunset.jpg)');
   });
 });
