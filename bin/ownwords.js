@@ -117,6 +117,7 @@ Batch Options:
   --force                        Overwrite existing files (default: error on conflict)
   --hierarchical                 Use hierarchical directory structure (posts/YYYY/MM/DD-slug/)
   --no-date-prefix               Don't add date prefix to filename (flat mode only)
+  --no-images                    Skip downloading images (default: images are downloaded)
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
@@ -228,8 +229,10 @@ async function cmdFetch(options) {
         site: options.flags.site,
         type: options.flags.type || 'posts',
         silent: options.silent,
+        force: options.flags.force === true,
         noDatePrefix: options.flags.nodateprefix === true,
-        hierarchical: options.flags.hierarchical === true
+        hierarchical: options.flags.hierarchical === true,
+        images: options.flags.noimages !== true
       });
 
       if (!options.silent) {
@@ -237,6 +240,9 @@ async function cmdFetch(options) {
         console.log(`   Slug: ${result.slug}`);
         console.log(`   Date: ${result.date}`);
         console.log(`   Words: ${result.wordCount}`);
+        if (result.imagesDownloaded > 0 || result.imagesFailed > 0) {
+          console.log(`   Images: ${result.imagesDownloaded} downloaded${result.imagesFailed > 0 ? `, ${result.imagesFailed} failed` : ''}`);
+        }
         if (result.categories.length > 0) {
           console.log(`   Categories: ${result.categories.join(', ')}`);
         }
@@ -246,6 +252,9 @@ async function cmdFetch(options) {
         console.log(`   Markdown: ${result.mdPath}`);
         if (result.jsonPath) {
           console.log(`   JSON sidecar: ${result.jsonPath}`);
+        }
+        if (result.imagesSidecarPath) {
+          console.log(`   Images sidecar: ${result.imagesSidecarPath}`);
         }
       }
     } catch (error) {

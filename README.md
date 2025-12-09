@@ -115,6 +115,25 @@ ownwords fetch https://example.com/blog/2025/01/01/my-article/
 - Featured image URL and alt text
 - Exact excerpt (not parsed from HTML)
 - JSON sidecar file for future bi-directional sync
+- Automatic image downloading with smart caching
+
+**Image downloading:**
+
+By default, `fetch --api` downloads all images to the local content directory and rewrites image URLs to use local relative paths (e.g., `./image.png`). This makes your local files self-sufficient.
+
+```bash
+# Default: download images locally
+ownwords fetch https://example.com/my-article/ --api --hierarchical
+
+# Skip image downloading (keep remote URLs)
+ownwords fetch https://example.com/my-article/ --api --no-images
+```
+
+Image download features:
+- **Smart caching**: Only downloads images that don't exist locally or have changed
+- **Size deduplication**: When WordPress serves multiple sizes of the same image, picks the highest quality version
+- **URL rewriting**: All image URLs in markdown (and featured_image in front matter) are rewritten to local paths
+- **Sidecar tracking**: Creates `index.images.json` to track original URLs and local filenames
 
 ### Convert HTML to Markdown
 
