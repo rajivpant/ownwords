@@ -111,11 +111,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.4.3] - 2025-12-09
+
+### Fixed
+
+- **Image sidecar format compatibility between fetch and publish** - The `fetch --api` command now creates image sidecar files (`index.images.json`) in the same format that `publish` expects. Previously, fetch created `{ images: [...] }` but publish expected `{ uploaded: {...} }`, causing images to be re-uploaded every time a fetched article was published.
+
+### Added
+
+- **`normalizeWordPressImageUrl()` function** - Converts Jetpack CDN URLs (e.g., `https://i0.wp.com/...`) back to direct WordPress URLs for proper image matching during publish
+- Tests for `normalizeWordPressImageUrl()` covering all CDN variants and edge cases
+
+### Changed
+
+- **Image sidecar format is now documented in CLAUDE.md** as a data contract that both fetch and publish must adhere to
+
+---
+
 ## [Unreleased]
 
 ### Planned
 
-- TypeScript type definitions (now included!)
 - Plugin system for custom converters
 - Sync status tracking in front matter
-- Bi-directional sync (push local changes back to WordPress)

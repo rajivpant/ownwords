@@ -81,6 +81,35 @@ By default, `fetch --api` downloads all images locally and rewrites URLs to loca
 
 The 20 URLs were deduplicated to 2 unique images (different size variants of same image).
 
+### Image Sidecar Format Contract
+
+The `index.images.json` sidecar file is used by BOTH fetch and publish. It MUST use this exact format:
+
+```json
+{
+  "site": "https://example.com",
+  "lastUpdated": "ISO-8601 timestamp",
+  "uploaded": {
+    "./local-filename.png": {
+      "url": "https://example.com/wp-content/uploads/.../filename.png",
+      "hash": "md5-hash-of-local-file",
+      "uploadedAt": "ISO-8601 timestamp"
+    }
+  }
+}
+```
+
+**Required fields:**
+- `site` - WordPress site URL, used to verify the sidecar matches the target site
+- `uploaded` - Object keyed by LOCAL path (e.g., `./image.png`)
+- `url` - The WordPress URL to reuse (prevents re-upload)
+- `hash` - MD5 hash of local file for change detection
+
+**Contract rules:**
+1. Fetch MUST write this format (not a different "download" format)
+2. Publish MUST read this format to check for existing uploads
+3. Both commands MUST use the same key format (`./filename.png`)
+
 ## Library Usage
 
 ```javascript

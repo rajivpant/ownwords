@@ -11,7 +11,8 @@ const {
   findSiteByDomain,
   generateEnrichedFrontMatter,
   generateDatePrefixedFilename,
-  generateHierarchicalPath
+  generateHierarchicalPath,
+  normalizeWordPressImageUrl
 } = require('../lib/fetch-api');
 
 describe('extractSlugFromUrl', () => {
@@ -530,5 +531,70 @@ describe('WpClient embed methods', () => {
 
     const result = client.normalizeEmbedResponse(null);
     assert.strictEqual(result, null);
+  });
+});
+
+describe('normalizeWordPressImageUrl', () => {
+  it('converts Jetpack CDN URL to direct WordPress URL', () => {
+    const cdnUrl = 'https://i0.wp.com/rajiv.com/wp-content/uploads/2023/10/image.png?resize=1024x768';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://rajiv.com/wp-content/uploads/2023/10/image.png');
+  });
+
+  it('handles i1.wp.com CDN variant', () => {
+    const cdnUrl = 'https://i1.wp.com/example.com/wp-content/uploads/2024/05/photo.jpg?w=800';
+    const siteUrl = 'https://example.com';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://example.com/wp-content/uploads/2024/05/photo.jpg');
+  });
+
+  it('handles i2.wp.com CDN variant', () => {
+    const cdnUrl = 'https://i2.wp.com/mysite.org/wp-content/uploads/image.webp?fit=600x400';
+    const siteUrl = 'https://mysite.org';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://mysite.org/wp-content/uploads/image.webp');
+  });
+
+  it('returns direct WordPress URL unchanged (strips query params)', () => {
+    const directUrl = 'https://rajiv.com/wp-content/uploads/2023/10/image.png?ver=1.0';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(directUrl, siteUrl);
+    assert.strictEqual(result, 'https://rajiv.com/wp-content/uploads/2023/10/image.png');
+  });
+
+  it('returns URL unchanged for non-CDN external URLs', () => {
+    const externalUrl = 'https://cdn.example.com/images/photo.jpg';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(externalUrl, siteUrl);
+    assert.strictEqual(result, 'https://cdn.example.com/images/photo.jpg');
+  });
+
+  it('handles URLs with complex query parameters', () => {
+    const cdnUrl = 'https://i0.wp.com/rajiv.com/wp-content/uploads/2023/10/image.png?resize=1024%2C768&ssl=1';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://rajiv.com/wp-content/uploads/2023/10/image.png');
+  });
+
+  it('handles deeply nested WordPress paths', () => {
+    const cdnUrl = 'https://i0.wp.com/blog.example.com/wp-content/uploads/sites/2/2024/01/15/deep/path/image.png';
+    const siteUrl = 'https://blog.example.com';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://blog.example.com/wp-content/uploads/sites/2/2024/01/15/deep/path/image.png');
+  });
+
+  it('returns original URL for invalid URL input', () => {
+    const invalidUrl = 'not-a-valid-url';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(invalidUrl, siteUrl);
+    assert.strictEqual(result, 'not-a-valid-url');
+  });
+
+  it('handles URLs without query params', () => {
+    const cdnUrl = 'https://i0.wp.com/rajiv.com/wp-content/uploads/2023/10/image.png';
+    const siteUrl = 'https://rajiv.com';
+    const result = normalizeWordPressImageUrl(cdnUrl, siteUrl);
+    assert.strictEqual(result, 'https://rajiv.com/wp-content/uploads/2023/10/image.png');
   });
 });
