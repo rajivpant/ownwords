@@ -194,13 +194,15 @@ describe('extractMetadata', () => {
   it('extracts date from time element', () => {
     const html = '<time datetime="2025-01-15T10:30:00">January 15, 2025</time>';
     const result = extractMetadata(html);
-    assert.strictEqual(result.date, '2025-01-15');
+    // Full timestamp is preserved when available
+    assert.strictEqual(result.date, '2025-01-15T10:30:00');
   });
 
   it('extracts date from article:published_time meta', () => {
     const html = '<meta property="article:published_time" content="2025-02-20T08:00:00" />';
     const result = extractMetadata(html);
-    assert.strictEqual(result.date, '2025-02-20');
+    // Full timestamp is preserved when available
+    assert.strictEqual(result.date, '2025-02-20T08:00:00');
   });
 
   it('extracts canonical URL', () => {

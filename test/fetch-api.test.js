@@ -400,8 +400,9 @@ describe('WpClient embed methods', () => {
     assert.strictEqual(normalized.slug, 'test-post');
     assert.strictEqual(normalized.title, 'Test Post');
     assert.strictEqual(normalized.content, '<p>Content here</p>');
-    assert.strictEqual(normalized.date, '2025-01-15');
-    assert.strictEqual(normalized.modified, '2025-01-16');
+    // Full timestamps are now preserved (not truncated to date-only)
+    assert.strictEqual(normalized.date, '2025-01-15T10:30:00');
+    assert.strictEqual(normalized.modified, '2025-01-16T11:00:00');
     assert.strictEqual(normalized.status, 'publish');
     assert.strictEqual(normalized.link, 'https://example.com/test-post/');
   });
