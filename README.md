@@ -544,6 +544,38 @@ const newPost = await client.createPost({
 4. **Copy to WordPress**: Paste exported HTML into WordPress editor
 5. **Deploy static site**: Push changes to your static site host
 
+## Known Limitations
+
+### YouTube embeds become clickable thumbnails
+
+When fetching WordPress articles, YouTube iframe embeds are converted to clickable thumbnail images linking to YouTube. This is because Markdown doesn't support iframes.
+
+**Impact:** When you publish back to WordPress, the video appears as a thumbnail image that links to YouTube, not an embedded player.
+
+**Workaround:** After publishing, manually edit the post in WordPress and replace the image with a YouTube embed block.
+
+### WordPress galleries lose grid layout
+
+WordPress gallery blocks use CSS classes to create multi-column layouts. During HTML→Markdown conversion, these classes are stripped. Images display as a vertical stack instead of a grid.
+
+**Workaround:**
+- Edit the markdown to add custom gallery markers
+- Add gallery CSS to your build template
+- Manually recreate the gallery in WordPress after publishing
+
+### Image captions may separate from images
+
+WordPress figure/figcaption relationships can be lost during conversion, with captions appearing as separate italic text.
+
+**Workaround:** Use markdown image title syntax:
+```markdown
+[![Alt text](./image.jpg "Caption text")](./image.jpg)
+```
+
+### Date format includes time component
+
+The `fetch --api` command outputs dates in ISO 8601 format with time (e.g., `2025-02-27T22:36:03`). Build tools that expect date-only format (`YYYY-MM-DD`) need to strip the time portion.
+
 ## Dependencies
 
 This toolkit uses only Node.js built-in modules:

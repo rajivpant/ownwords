@@ -110,6 +110,88 @@ The `index.images.json` sidecar file is used by BOTH fetch and publish. It MUST 
 2. Publish MUST read this format to check for existing uploads
 3. Both commands MUST use the same key format (`./filename.png`)
 
+## Front Matter Format Contract
+
+The `fetch --api` command produces YAML front matter with specific formats that downstream build tools must handle:
+
+```yaml
+title: "Article Title"
+slug: "article-slug"
+date: "2025-02-27T22:36:03"        # ISO datetime WITH time (not just YYYY-MM-DD)
+modified: "2025-04-05T12:16:43"    # Only if different from date
+description: "SEO description..."
+canonical_url: "https://example.com/blog/..."
+categories:
+  - "Category Name"
+tags:
+  - "tag1"
+  - "tag2"
+author: "Author Name"
+featured_image: "./local-image.jpg"  # Local path after image download
+featured_image_alt: "Alt text"
+wordpress:
+  post_id: 1234
+  category_ids: [6]
+  tag_ids: [123, 456]
+  author_id: 789
+  synced_at: "2025-12-16T23:42:10.108Z"
+```
+
+**Important for build tools:**
+- `date` includes time component — parse with `split('T')[0]` if only date needed
+- `featured_image` is a local path (`./filename.jpg`) — strip `./` for HTML src attributes
+- `categories` and `tags` are arrays of strings, not IDs
+
+**Post-fetch improvements often needed:**
+
+The fetched `description` is usually the WordPress excerpt — often truncated or generic. Before publishing, improve it for SEO:
+- Keep to 150-160 characters
+- Front-load searchable names and keywords
+- Be specific about the content
+- See `article-publishing.md` runbook for detailed guidelines
+
+The fetched `tags` may also need optimization:
+- Add names of people mentioned in the article
+- Add both short and long forms (AI + artificial intelligence)
+- Remove generic tags (technology, leadership)
+- See `article-publishing.md` runbook for detailed guidelines
+
+## Image Dimension Handling
+
+When publishing markdown to WordPress, ownwords automatically adds `width` and `height` attributes to local images. This:
+
+- Prevents layout shift during page load
+- Enables WordPress/Jetpack to generate proper responsive `srcset`
+- Ensures consistent sizing across browsers
+
+**Format detection:** Uses magic bytes (not file extension) to detect format, so mislabeled files (e.g., PNG saved as `.webp`) are handled correctly.
+
+**Supported formats:** JPEG, PNG, WebP, GIF (with macOS `sips` fallback for others).
+
+## YouTube Embed Handling
+
+WordPress YouTube embeds (iframe-based) are converted to clickable thumbnail images:
+
+**WordPress HTML input:**
+```html
+<figure class="wp-block-embed-youtube">
+  <iframe src="https://www.youtube.com/embed/VIDEO_ID" title="Video Title"></iframe>
+</figure>
+```
+
+**Markdown output:**
+```markdown
+[![Video Title](https://img.youtube.com/vi/VIDEO_ID/maxresdefault.jpg)](https://www.youtube.com/watch?v=VIDEO_ID)
+```
+
+**Why thumbnails instead of iframes?**
+- Markdown doesn't support iframes
+- Thumbnails are portable across all markdown renderers
+- Clicking opens YouTube directly
+- Build tools can optionally convert back to iframes for HTML output
+
+**The YouTube thumbnail is also downloaded locally** (as `maxresdefault.jpg`) to keep articles self-contained.
+
 ## Library Usage
 
 ```javascript
@@ -152,6 +234,36 @@ ownwords/
 ├── README.md
 ├── LICENSE               # MIT
 └── CLAUDE.md             # This file
+```
+
+## Known Limitations
+
+### YouTube embeds become thumbnails (not re-embedded on publish)
+
+When fetching, YouTube iframes are converted to clickable thumbnail images (see "YouTube Embed Handling" above). When publishing back to WordPress, these remain as images linking to YouTube — they do **not** automatically convert back to embedded players.
+
+**Workaround:** After publishing, manually edit the post in WordPress to replace the image with a YouTube embed block.
+
+**Future enhancement:** Add option to `publish` command to detect YouTube thumbnail links and convert them back to WordPress YouTube embed blocks.
+
+### WordPress galleries lose grid layout
+
+WordPress gallery blocks have CSS classes that create multi-column layouts. During HTML→Markdown conversion, these classes are stripped. The result is images displayed as a vertical stack rather than a grid.
+
+**Workaround:**
+- Edit the markdown to use custom gallery markers
+- Add gallery CSS to the build template
+- Manually recreate the gallery in WordPress after publishing
+
+**Future enhancement:** Preserve gallery structure with custom markdown syntax that build tools can recognize.
+
+### Image captions may be separated from images
+
+WordPress figure/figcaption relationships can be lost during conversion, resulting in captions appearing as separate italic text rather than associated with their images.
+
+**Workaround:** Use markdown image title syntax to keep captions with images:
+```markdown
+[![Alt text](./image.jpg "Caption text")](./image.jpg)
 ```
 
 ## Git Operations
