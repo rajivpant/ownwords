@@ -179,7 +179,10 @@ describe('markdownToHtml', () => {
   it('converts blockquotes', () => {
     const md = '> This is a quote';
     const result = markdownToHtml(md);
-    assert.ok(result.includes('<blockquote>This is a quote</blockquote>'));
+    // Blockquotes are now WordPress Gutenberg quote blocks
+    assert.ok(result.includes('<!-- wp:quote -->'));
+    assert.ok(result.includes('<blockquote class="wp-block-quote"><p>This is a quote</p></blockquote>'));
+    assert.ok(result.includes('<!-- /wp:quote -->'));
   });
 
   it('converts horizontal rules', () => {
@@ -220,6 +223,7 @@ const x = 1;
     // Inline code now includes style attribute
     assert.ok(result.includes('>code</code>'));
     assert.ok(result.includes('class="language-javascript"'));
-    assert.ok(result.includes('<blockquote>A famous quote</blockquote>'));
+    // Blockquotes are now WordPress Gutenberg quote blocks
+    assert.ok(result.includes('<blockquote class="wp-block-quote"><p>A famous quote</p></blockquote>'));
   });
 });
