@@ -81,6 +81,9 @@ Commands:
   publish <markdown> [options]   Publish markdown to WordPress
   publish-all <dir> [options]    Batch publish all markdown files
 
+  update-metadata <markdown>     Update only categories, tags, excerpt (no content changes)
+  update-metadata-all <dir>      Batch update metadata for all markdown files
+
   compare <file1> <file2>        Compare two markdown files for content drift
   compare-batch <mapping.json>   Compare multiple file pairs from a JSON mapping
 
@@ -126,6 +129,13 @@ Publish Options:
   --date=<iso-date>              Publish date in ISO 8601 format (e.g., 2025-12-07T23:00:00)
   --dryrun                       Show what would be published without publishing
   --yes                          Skip confirmation prompts (for automation)
+
+Update-Metadata Options:
+  --site=<name>                  WordPress site to update (default: default site)
+  --dryrun                       Show what would be updated without making changes
+  --categories-only              Only update categories
+  --tags-only                    Only update tags
+  --excerpt-only                 Only update excerpt/description
 
 Safeguards:
   - If wordpress.post_id exists in front matter, --update is auto-enabled
@@ -1116,6 +1126,231 @@ async function cmdPublishAll(options) {
 }
 
 // ============================================================================
+// UPDATE-METADATA COMMANDS
+// ============================================================================
+
+async function cmdUpdateMetadata(options) {
+  const mdPath = options.positional[0];
+
+  if (!mdPath) {
+    console.error('Error: Markdown file required');
+    console.log('Usage: ownwords update-metadata <markdown> [options]');
+    console.log('');
+    console.log('Updates only categories, tags, and excerpt. Does NOT touch content.');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(mdPath)) {
+    console.error(`Error: File not found: ${mdPath}`);
+    process.exit(1);
+  }
+
+  // Get WordPress site
+  const siteName = options.flags.site;
+  const site = getWordPressSite(siteName);
+
+  if (!site) {
+    if (siteName) {
+      console.error(`Error: Site not found: ${siteName}`);
+    } else {
+      console.error('Error: No WordPress site configured');
+      console.log('Add one with: ownwords config-wp add <name> <url>');
+    }
+    process.exit(1);
+  }
+
+  const dryRun = options.flags.dryrun === true;
+  const categoriesOnly = options.flags.categoriesonly === true;
+  const tagsOnly = options.flags.tagsonly === true;
+  const excerptOnly = options.flags.excerptonly === true;
+
+  if (!options.silent) {
+    console.log(`Updating metadata on: ${site.url}`);
+    console.log(`  File: ${mdPath}`);
+    if (categoriesOnly) console.log(`  Mode: categories only`);
+    else if (tagsOnly) console.log(`  Mode: tags only`);
+    else if (excerptOnly) console.log(`  Mode: excerpt only`);
+    else console.log(`  Mode: all metadata (categories, tags, excerpt)`);
+    if (dryRun) {
+      console.log('  DRY RUN - no changes will be made');
+    }
+  }
+
+  if (dryRun) {
+    // Show what would be updated
+    try {
+      const mdContent = fs.readFileSync(mdPath, 'utf-8');
+      const frontMatterMatch = mdContent.match(/^---\n([\s\S]*?)\n---/);
+
+      if (frontMatterMatch) {
+        const fm = frontMatterMatch[1];
+
+        console.log(`\n📋 DRY RUN - Would update:`);
+        console.log(`${'─'.repeat(50)}`);
+
+        // Extract and show what would be updated
+        const catMatch = fm.match(/^category:\s*['"]?([^'"\n]+)['"]?/m);
+        const descMatch = fm.match(/^description:\s*['"]?(.+?)['"]?$/m);
+        const tagsSection = fm.match(/^tags:\s*\n((?:\s+-\s+.+\n?)+)/m);
+
+        if (!tagsOnly && !excerptOnly && catMatch) {
+          console.log(`\n📁 Category: ${catMatch[1].trim()}`);
+        }
+
+        if (!categoriesOnly && !excerptOnly && tagsSection) {
+          const tags = tagsSection[1]
+            .split('\n')
+            .map(line => line.replace(/^\s+-\s+/, '').trim())
+            .filter(t => t);
+          console.log(`\n🏷️  Tags (${tags.length}): ${tags.slice(0, 5).join(', ')}${tags.length > 5 ? '...' : ''}`);
+        }
+
+        if (!categoriesOnly && !tagsOnly && descMatch) {
+          const excerpt = descMatch[1].trim();
+          console.log(`\n📝 Excerpt: ${excerpt.substring(0, 100)}${excerpt.length > 100 ? '...' : ''}`);
+        }
+
+        console.log(`\n${'─'.repeat(50)}`);
+        console.log(`To execute: remove --dryrun flag`);
+      }
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+    return;
+  }
+
+  try {
+    const client = new WpClient(site);
+    const result = await client.updateMetadataOnly(mdPath, {
+      categoriesOnly,
+      tagsOnly,
+      excerptOnly,
+      silent: options.silent
+    });
+
+    if (result.action === 'no-changes') {
+      console.log(`\n⚠️  No metadata to update`);
+    } else {
+      console.log(`\n✅ Metadata updated!`);
+      console.log(`   Post ID: ${result.postId}`);
+      console.log(`   Slug: ${result.slug}`);
+      console.log(`   Updated: ${result.updatedFields.join(', ')}`);
+      console.log(`   URL: ${result.link}`);
+    }
+  } catch (error) {
+    console.error(`\n❌ Update failed: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+async function cmdUpdateMetadataAll(options) {
+  const dir = options.positional[0];
+
+  if (!dir) {
+    console.error('Error: Directory required');
+    console.log('Usage: ownwords update-metadata-all <directory> [options]');
+    process.exit(1);
+  }
+
+  if (!fs.existsSync(dir)) {
+    console.error(`Error: Directory not found: ${dir}`);
+    process.exit(1);
+  }
+
+  // Find all index.md files recursively
+  const findMarkdownFiles = (dirPath) => {
+    const files = [];
+    const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      if (entry.isDirectory()) {
+        files.push(...findMarkdownFiles(fullPath));
+      } else if (entry.name === 'index.md') {
+        files.push(fullPath);
+      }
+    }
+    return files;
+  };
+
+  const mdFiles = findMarkdownFiles(dir);
+
+  if (mdFiles.length === 0) {
+    console.log('No index.md files found in directory.');
+    return;
+  }
+
+  // Get WordPress site
+  const siteName = options.flags.site;
+  const site = getWordPressSite(siteName);
+
+  if (!site) {
+    if (siteName) {
+      console.error(`Error: Site not found: ${siteName}`);
+    } else {
+      console.error('Error: No WordPress site configured');
+    }
+    process.exit(1);
+  }
+
+  const dryRun = options.flags.dryrun === true;
+  const categoriesOnly = options.flags.categoriesonly === true;
+  const tagsOnly = options.flags.tagsonly === true;
+  const excerptOnly = options.flags.excerptonly === true;
+
+  console.log(`Updating metadata for ${mdFiles.length} files on: ${site.url}`);
+  if (dryRun) {
+    console.log('  DRY RUN - no changes will be made');
+  }
+  console.log('');
+
+  const client = new WpClient(site);
+  const results = { success: [], failed: [], skipped: [] };
+
+  for (const mdPath of mdFiles) {
+    const relativePath = path.relative(dir, mdPath);
+    process.stdout.write(`  ${relativePath}... `);
+
+    if (dryRun) {
+      console.log('(dry run)');
+      results.success.push({ path: relativePath, action: 'dry-run' });
+      continue;
+    }
+
+    try {
+      const result = await client.updateMetadataOnly(mdPath, {
+        categoriesOnly,
+        tagsOnly,
+        excerptOnly,
+        silent: true
+      });
+
+      if (result.action === 'no-changes') {
+        console.log('⏭️  no changes');
+        results.skipped.push({ path: relativePath });
+      } else {
+        console.log(`✅ ${result.updatedFields.join(', ')}`);
+        results.success.push({ path: relativePath, ...result });
+      }
+    } catch (error) {
+      console.log(`❌ ${error.message}`);
+      results.failed.push({ path: relativePath, error: error.message });
+    }
+  }
+
+  // Summary
+  console.log(`\n${'='.repeat(50)}`);
+  console.log(`Success: ${results.success.length}`);
+  console.log(`Skipped: ${results.skipped.length}`);
+  console.log(`Failed: ${results.failed.length}`);
+
+  if (results.failed.length > 0) {
+    process.exit(1);
+  }
+}
+
+// ============================================================================
 // COMPARE COMMANDS
 // ============================================================================
 
@@ -1297,6 +1532,12 @@ async function main() {
       break;
     case 'compare-batch':
       cmdCompareBatch(options);
+      break;
+    case 'update-metadata':
+      await cmdUpdateMetadata(options);
+      break;
+    case 'update-metadata-all':
+      await cmdUpdateMetadataAll(options);
       break;
     default:
       console.error(`Unknown command: ${options.command}`);
