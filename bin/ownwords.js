@@ -1217,7 +1217,7 @@ async function cmdUpdateMetadata(options) {
         if (!categoriesOnly && !excerptOnly && tagsSection) {
           const tags = tagsSection[1]
             .split('\n')
-            .map(line => line.replace(/^\s+-\s+/, '').trim())
+            .map(line => line.replace(/^\s+-\s+/, '').trim().replace(/^['"]|['"]$/g, ''))
             .filter(t => t);
           console.log(`\n🏷️  Tags (${tags.length}): ${tags.slice(0, 5).join(', ')}${tags.length > 5 ? '...' : ''}`);
         }
