@@ -136,6 +136,7 @@ Update-Metadata Options:
   --categories-only              Only update categories
   --tags-only                    Only update tags
   --excerpt-only                 Only update excerpt/description
+  --use-singular-category        Use 'category:' field (singular) instead of 'categories:' (plural)
 
 Safeguards:
   - If wordpress.post_id exists in front matter, --update is auto-enabled
@@ -1163,6 +1164,7 @@ async function cmdUpdateMetadata(options) {
   const categoriesOnly = options.flags.categoriesonly === true;
   const tagsOnly = options.flags.tagsonly === true;
   const excerptOnly = options.flags.excerptonly === true;
+  const useSingularCategory = options.flags.usesingularcategory === true;
 
   if (!options.silent) {
     console.log(`Updating metadata on: ${site.url}`);
@@ -1171,6 +1173,7 @@ async function cmdUpdateMetadata(options) {
     else if (tagsOnly) console.log(`  Mode: tags only`);
     else if (excerptOnly) console.log(`  Mode: excerpt only`);
     else console.log(`  Mode: all metadata (categories, tags, excerpt)`);
+    if (useSingularCategory) console.log(`  Category field: singular (category:)`);
     if (dryRun) {
       console.log('  DRY RUN - no changes will be made');
     }
@@ -1190,11 +1193,25 @@ async function cmdUpdateMetadata(options) {
 
         // Extract and show what would be updated
         const catMatch = fm.match(/^category:\s*['"]?([^'"\n]+)['"]?/m);
+        const categoriesSection = fm.match(/^categories:\s*\n((?:\s+-\s+.+\n?)+)/m);
         const descMatch = fm.match(/^description:\s*['"]?(.+?)['"]?$/m);
         const tagsSection = fm.match(/^tags:\s*\n((?:\s+-\s+.+\n?)+)/m);
 
-        if (!tagsOnly && !excerptOnly && catMatch) {
-          console.log(`\n📁 Category: ${catMatch[1].trim()}`);
+        // Show category/categories based on which field will be used
+        if (!tagsOnly && !excerptOnly) {
+          if (useSingularCategory && catMatch) {
+            console.log(`\n📁 Category (singular): ${catMatch[1].trim()}`);
+          } else if (!useSingularCategory && categoriesSection) {
+            const categories = categoriesSection[1]
+              .split('\n')
+              .map(line => line.replace(/^\s+-\s+/, '').trim().replace(/^['"]|['"]$/g, ''))
+              .filter(cat => cat.length > 0);
+            console.log(`\n📁 Categories (${categories.length}): ${categories.join(', ')}`);
+          } else if (useSingularCategory) {
+            console.log(`\n📁 Category (singular): (none found)`);
+          } else {
+            console.log(`\n📁 Categories: (none found)`);
+          }
         }
 
         if (!categoriesOnly && !excerptOnly && tagsSection) {
@@ -1226,6 +1243,7 @@ async function cmdUpdateMetadata(options) {
       categoriesOnly,
       tagsOnly,
       excerptOnly,
+      useSingularCategory,
       silent: options.silent
     });
 
@@ -1298,8 +1316,12 @@ async function cmdUpdateMetadataAll(options) {
   const categoriesOnly = options.flags.categoriesonly === true;
   const tagsOnly = options.flags.tagsonly === true;
   const excerptOnly = options.flags.excerptonly === true;
+  const useSingularCategory = options.flags.usesingularcategory === true;
 
   console.log(`Updating metadata for ${mdFiles.length} files on: ${site.url}`);
+  if (useSingularCategory) {
+    console.log(`  Category field: singular (category:)`);
+  }
   if (dryRun) {
     console.log('  DRY RUN - no changes will be made');
   }
@@ -1323,6 +1345,7 @@ async function cmdUpdateMetadataAll(options) {
         categoriesOnly,
         tagsOnly,
         excerptOnly,
+        useSingularCategory,
         silent: true
       });
 
