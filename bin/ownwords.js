@@ -42,6 +42,7 @@ const {
 const {
   updateFrontMatterWithWordPress,
   readWordPressMetadata,
+  readFrontMatterType,
   extractLocalImages,
   loadSidecar,
   getImagesToUpload
@@ -124,8 +125,9 @@ Batch Options:
 
 Publish Options:
   --site=<name>                  WordPress site to publish to (default: default site)
+  --type=<type>                  Content type: posts (default) or pages
   --status=<status>              Post status: publish, draft, future, private (default: publish)
-  --update                       Update existing post if found by slug
+  --update                       Update existing post/page if found by slug
   --date=<iso-date>              Publish date in ISO 8601 format (e.g., 2025-12-07T23:00:00)
   --dryrun                       Show what would be published without publishing
   --yes                          Skip confirmation prompts (for automation)
@@ -174,6 +176,9 @@ Examples:
   # Publish to WordPress
   ownwords publish ./content/articles/my-article.md --status=draft  # Only if you explicitly want a draft
   ownwords publish ./content/articles/my-article.md --status=publish --update
+
+  # Publish a page (not a post)
+  ownwords publish ./content/pages/about/index.md --type=pages --update
 `);
 }
 
@@ -911,6 +916,24 @@ async function cmdPublish(options) {
     update = true;
   }
 
+  // SAFEGUARD: Validate frontmatter type matches --type flag
+  // Prevents publishing pages as posts (and vice versa)
+  const type = options.flags.type || 'posts';
+  const frontMatterType = readFrontMatterType(mdPath);
+
+  if (frontMatterType === 'page' && type !== 'pages') {
+    console.error(`\n❌ TYPE MISMATCH ERROR: Frontmatter has 'type: page' but you're publishing as a POST.`);
+    console.error(`   This file is a WordPress PAGE, not a post.`);
+    console.error(`   Use: ownwords publish ${mdPath} --type=pages --update`);
+    console.error(`   Or remove 'type: page' from frontmatter if this is actually a post.\n`);
+    process.exit(1);
+  }
+
+  if (frontMatterType !== 'page' && type === 'pages') {
+    console.log(`\n⚠️  WARNING: Publishing as a PAGE but frontmatter doesn't have 'type: page'.`);
+    console.log(`   Consider adding 'type: page' to frontmatter for safety.\n`);
+  }
+
   if (!options.silent) {
     console.log(`Publishing to: ${site.url}`);
     console.log(`  File: ${mdPath}`);
@@ -994,13 +1017,17 @@ async function cmdPublish(options) {
     return;
   }
 
-  // SAFEGUARD: Confirmation prompt before creating new posts
+  // type is already defined above (in the type mismatch safeguard)
+  const contentTypeName = type === 'pages' ? 'page' : 'post';
+  const contentTypeNameUpper = type === 'pages' ? 'PAGE' : 'POST';
+
+  // SAFEGUARD: Confirmation prompt before creating new content
   const skipConfirm = options.flags.yes === true;
 
   if (!update && !skipConfirm) {
-    console.log(`\n⚠️  CREATING NEW POST`);
-    console.log(`   This will create a new ${status} post in WordPress.`);
-    console.log(`   If you intended to update an existing post, cancel and use --update.\n`);
+    console.log(`\n⚠️  CREATING NEW ${contentTypeNameUpper}`);
+    console.log(`   This will create a new ${status} ${contentTypeName} in WordPress.`);
+    console.log(`   If you intended to update an existing ${contentTypeName}, cancel and use --update.\n`);
 
     const answer = await prompt('Continue? (y/N): ');
     if (answer.toLowerCase() !== 'y' && answer.toLowerCase() !== 'yes') {
@@ -1016,11 +1043,12 @@ async function cmdPublish(options) {
       update,
       date: publishDate,
       siteName: siteName || site.url,
-      silent: options.silent
+      silent: options.silent,
+      type
     });
 
     console.log(`\n✅ ${result.action === 'created' ? 'Published' : 'Updated'}!`);
-    console.log(`   Post ID: ${result.postId}`);
+    console.log(`   ${contentTypeNameUpper} ID: ${result.postId}`);
     console.log(`   Slug: ${result.slug}`);
     console.log(`   Status: ${result.status}`);
     console.log(`   URL: ${result.link}`);
@@ -1038,7 +1066,7 @@ async function cmdPublish(options) {
       console.error(`   Warning: Failed to save metadata: ${metaError.message}`);
     }
   } catch (error) {
-    console.error(`\n❌ Publish failed: ${error.message}`);
+    console.error(`\n❌ ${contentTypeNameUpper} publish failed: ${error.message}`);
     process.exit(1);
   }
 }
@@ -1165,15 +1193,28 @@ async function cmdUpdateMetadata(options) {
   const tagsOnly = options.flags.tagsonly === true;
   const excerptOnly = options.flags.excerptonly === true;
   const useSingularCategory = options.flags.usesingularcategory === true;
+  const type = options.flags.type || 'posts';
+  const contentTypeName = type === 'pages' ? 'page' : 'post';
+  const contentTypeNameUpper = type === 'pages' ? 'PAGE' : 'POST';
+
+  // Pages don't support categories or tags
+  if (type === 'pages' && (categoriesOnly || tagsOnly)) {
+    console.error(`Error: Pages do not have categories or tags in WordPress.`);
+    console.log(`For pages, only excerpt can be updated.`);
+    process.exit(1);
+  }
 
   if (!options.silent) {
-    console.log(`Updating metadata on: ${site.url}`);
+    console.log(`Updating ${contentTypeName} metadata on: ${site.url}`);
     console.log(`  File: ${mdPath}`);
-    if (categoriesOnly) console.log(`  Mode: categories only`);
+    console.log(`  Type: ${type}`);
+    if (type === 'pages') {
+      console.log(`  Mode: excerpt only (pages don't have categories/tags)`);
+    } else if (categoriesOnly) console.log(`  Mode: categories only`);
     else if (tagsOnly) console.log(`  Mode: tags only`);
     else if (excerptOnly) console.log(`  Mode: excerpt only`);
     else console.log(`  Mode: all metadata (categories, tags, excerpt)`);
-    if (useSingularCategory) console.log(`  Category field: singular (category:)`);
+    if (type === 'posts' && useSingularCategory) console.log(`  Category field: singular (category:)`);
     if (dryRun) {
       console.log('  DRY RUN - no changes will be made');
     }
@@ -1244,20 +1285,21 @@ async function cmdUpdateMetadata(options) {
       tagsOnly,
       excerptOnly,
       useSingularCategory,
-      silent: options.silent
+      silent: options.silent,
+      type
     });
 
     if (result.action === 'no-changes') {
       console.log(`\n⚠️  No metadata to update`);
     } else {
-      console.log(`\n✅ Metadata updated!`);
-      console.log(`   Post ID: ${result.postId}`);
+      console.log(`\n✅ ${contentTypeNameUpper} metadata updated!`);
+      console.log(`   ${contentTypeNameUpper} ID: ${result.postId}`);
       console.log(`   Slug: ${result.slug}`);
       console.log(`   Updated: ${result.updatedFields.join(', ')}`);
       console.log(`   URL: ${result.link}`);
     }
   } catch (error) {
-    console.error(`\n❌ Update failed: ${error.message}`);
+    console.error(`\n❌ ${contentTypeNameUpper} update failed: ${error.message}`);
     process.exit(1);
   }
 }
@@ -1317,9 +1359,19 @@ async function cmdUpdateMetadataAll(options) {
   const tagsOnly = options.flags.tagsonly === true;
   const excerptOnly = options.flags.excerptonly === true;
   const useSingularCategory = options.flags.usesingularcategory === true;
+  const type = options.flags.type || 'posts';
+  const contentTypeName = type === 'pages' ? 'pages' : 'posts';
 
-  console.log(`Updating metadata for ${mdFiles.length} files on: ${site.url}`);
-  if (useSingularCategory) {
+  // Pages don't support categories or tags
+  if (type === 'pages' && (categoriesOnly || tagsOnly)) {
+    console.error(`Error: Pages do not have categories or tags in WordPress.`);
+    console.log(`For pages, only excerpt can be updated.`);
+    process.exit(1);
+  }
+
+  console.log(`Updating ${contentTypeName} metadata for ${mdFiles.length} files on: ${site.url}`);
+  console.log(`  Type: ${type}`);
+  if (type === 'posts' && useSingularCategory) {
     console.log(`  Category field: singular (category:)`);
   }
   if (dryRun) {
@@ -1346,7 +1398,8 @@ async function cmdUpdateMetadataAll(options) {
         tagsOnly,
         excerptOnly,
         useSingularCategory,
-        silent: true
+        silent: true,
+        type
       });
 
       if (result.action === 'no-changes') {
