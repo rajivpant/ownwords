@@ -39,6 +39,13 @@ const {
   compareBatch,
   generateReport
 } = require('../lib/compare');
+const { TagAnalyzer, PRESERVED_TAGS } = require('../lib/tag-analyzer');
+const {
+  ClaudeClient,
+  checkClaudeConfig,
+  saveClaudeApiKey,
+  removeClaudeApiKey
+} = require('../lib/claude-api');
 const {
   updateFrontMatterWithWordPress,
   readWordPressMetadata,
@@ -87,6 +94,17 @@ Commands:
 
   compare <file1> <file2>        Compare two markdown files for content drift
   compare-batch <mapping.json>   Compare multiple file pairs from a JSON mapping
+
+  config-claude <action>         Manage Claude API configuration
+    set-key                      Set Claude API key
+    remove-key                   Remove Claude API key
+    test                         Test Claude API connection
+    status                       Show configuration status
+
+  analyze-tags <dirs...>         AI-powered tag analysis (Phase 1)
+  synthesize-taxonomy            Create unified taxonomy from analysis (Phase 2)
+  assign-tags                    Assign tags from taxonomy to articles (Phase 3)
+  apply-tags                     Apply tag assignments to local files
 
 Options:
   --help, -h                     Show this help message
@@ -152,6 +170,15 @@ Compare Options:
   --normalize                    Normalize typography before comparing (quotes, spaces)
   --verbose                      Show detailed context for differences
   --json                         Output comparison results as JSON
+
+Tag Analysis Options:
+  --output-dir=<dir>             Directory for analysis output (default: ./tag-analysis)
+  --batch-size=<n>               Articles per progress report (default: 20)
+  --delay=<ms>                   Delay between API calls in ms (default: 500)
+  --resume                       Resume from previous run (default: true)
+  --no-resume                    Start fresh, ignore previous progress
+  --dryrun                       Preview changes without modifying files
+  --max-tags=<n>                 Maximum tags in taxonomy (default: 100)
 
 Examples:
   # Fetch a single article (HTML scraping)
@@ -1561,6 +1588,319 @@ function cmdCompareBatch(options) {
 }
 
 // ============================================================================
+// CLAUDE CONFIG COMMANDS
+// ============================================================================
+
+async function cmdConfigClaude(options) {
+  const action = options.positional[0];
+
+  if (!action) {
+    console.error('Error: Action required');
+    console.log('Usage: ownwords config-claude <set-key|remove-key|test|status>');
+    process.exit(1);
+  }
+
+  switch (action) {
+    case 'set-key': {
+      const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+      });
+
+      const apiKey = await new Promise(resolve => {
+        rl.question('Enter Claude API key: ', answer => {
+          rl.close();
+          resolve(answer.trim());
+        });
+      });
+
+      if (!apiKey) {
+        console.error('Error: API key cannot be empty');
+        process.exit(1);
+      }
+
+      if (!apiKey.startsWith('sk-ant-')) {
+        console.log('Warning: API key does not start with expected prefix (sk-ant-)');
+      }
+
+      saveClaudeApiKey(apiKey);
+      console.log('✅ Claude API key saved to config');
+      break;
+    }
+
+    case 'remove-key': {
+      removeClaudeApiKey();
+      console.log('✅ Claude API key removed from config');
+      break;
+    }
+
+    case 'test': {
+      const status = checkClaudeConfig();
+      if (!status.configured) {
+        console.error('Error: Claude API key not configured');
+        console.log('Set one with: ownwords config-claude set-key');
+        console.log('Or set OWNWORDS_CLAUDE_API_KEY environment variable');
+        process.exit(1);
+      }
+
+      console.log(`Testing Claude API connection (model: ${status.model})...`);
+
+      try {
+        const client = new ClaudeClient();
+        const result = await client.testConnection();
+
+        if (result.success) {
+          console.log(`\n✅ Connection successful!`);
+          console.log(`   Model: ${result.model}`);
+          console.log(`   Response: ${result.message}`);
+        } else {
+          console.log(`\n❌ Connection failed: ${result.error}`);
+          process.exit(1);
+        }
+      } catch (error) {
+        console.error(`\n❌ Error: ${error.message}`);
+        process.exit(1);
+      }
+      break;
+    }
+
+    case 'status': {
+      const status = checkClaudeConfig();
+      console.log('Claude API Configuration:');
+      console.log(`  Configured: ${status.configured ? 'Yes' : 'No'}`);
+      console.log(`  Source: ${status.source}`);
+      console.log(`  Model: ${status.model}`);
+      break;
+    }
+
+    default:
+      console.error(`Unknown action: ${action}`);
+      console.log('Usage: ownwords config-claude <set-key|remove-key|test|status>');
+      process.exit(1);
+  }
+}
+
+// ============================================================================
+// TAG ANALYSIS COMMANDS
+// ============================================================================
+
+async function cmdAnalyzeTags(options) {
+  const contentDirs = options.positional;
+
+  if (contentDirs.length === 0) {
+    console.error('Error: At least one content directory required');
+    console.log('Usage: ownwords analyze-tags <dir1> [dir2] [dir3] [options]');
+    console.log('\nExample:');
+    console.log('  ownwords analyze-tags ./rajiv-site/content/posts ./synthesis-coding-site/content/posts');
+    process.exit(1);
+  }
+
+  // Verify directories exist
+  for (const dir of contentDirs) {
+    if (!fs.existsSync(dir)) {
+      console.error(`Error: Directory not found: ${dir}`);
+      process.exit(1);
+    }
+  }
+
+  const outputDir = options.flags.outputdir || './tag-analysis';
+  const batchSize = parseInt(options.flags.batchsize) || 20;
+  const delayMs = parseInt(options.flags.delay) || 500;
+  const resume = options.flags.noresume !== true;
+
+  console.log('Phase 1: AI-Powered Tag Analysis');
+  console.log('================================');
+  console.log(`Content directories: ${contentDirs.length}`);
+  for (const dir of contentDirs) {
+    console.log(`  - ${dir}`);
+  }
+  console.log(`Output directory: ${outputDir}`);
+  console.log(`Resume from previous: ${resume}`);
+  console.log('');
+
+  try {
+    const analyzer = new TagAnalyzer({
+      contentDirs,
+      outputDir,
+      verbose: options.verbose
+    });
+
+    const results = await analyzer.analyzeAllArticles({
+      batchSize,
+      delayMs,
+      resume
+    });
+
+    console.log('\n✅ Phase 1 Complete');
+    console.log(`   Articles analyzed: ${results.successCount}`);
+    console.log(`   Errors: ${results.errorCount}`);
+    console.log(`   Output: ${outputDir}/phase1-suggestions.json`);
+    console.log('\nNext step: ownwords synthesize-taxonomy --output-dir=' + outputDir);
+
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+async function cmdSynthesizeTaxonomy(options) {
+  const outputDir = options.flags.outputdir || './tag-analysis';
+  const maxTags = parseInt(options.flags.maxtags) || 100;
+  const suggestionsFile = options.positional[0] ||
+    path.join(outputDir, 'phase1-suggestions.json');
+
+  if (!fs.existsSync(suggestionsFile)) {
+    console.error(`Error: Phase 1 results not found: ${suggestionsFile}`);
+    console.log('Run analyze-tags first to generate tag suggestions.');
+    process.exit(1);
+  }
+
+  console.log('Phase 2: Taxonomy Synthesis');
+  console.log('===========================');
+  console.log(`Input: ${suggestionsFile}`);
+  console.log(`Max tags: ${maxTags}`);
+  console.log('');
+
+  try {
+    const analyzer = new TagAnalyzer({
+      contentDirs: [],
+      outputDir,
+      verbose: options.verbose
+    });
+
+    const taxonomy = await analyzer.synthesizeTaxonomy({
+      suggestionsFile,
+      maxTags
+    });
+
+    console.log('\n✅ Phase 2 Complete');
+    console.log(`   Tags in taxonomy: ${taxonomy.taxonomy?.length || 0}`);
+    console.log(`   Merges: ${Object.keys(taxonomy.merges || {}).length}`);
+    console.log(`   Removed: ${taxonomy.removed?.length || 0}`);
+    console.log(`   Output: ${outputDir}/phase2-taxonomy.json`);
+    console.log(`   Readable: ${outputDir}/taxonomy.txt`);
+    console.log('\nReview the taxonomy, then run:');
+    console.log('  ownwords assign-tags --output-dir=' + outputDir);
+
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+async function cmdAssignTags(options) {
+  const contentDirs = options.positional;
+  const outputDir = options.flags.outputdir || './tag-analysis';
+  const delayMs = parseInt(options.flags.delay) || 300;
+  const resume = options.flags.noresume !== true;
+  const taxonomyFile = options.flags.taxonomy ||
+    path.join(outputDir, 'phase2-taxonomy.json');
+
+  if (!fs.existsSync(taxonomyFile)) {
+    console.error(`Error: Taxonomy file not found: ${taxonomyFile}`);
+    console.log('Run synthesize-taxonomy first to create the taxonomy.');
+    process.exit(1);
+  }
+
+  // If no content dirs provided, try to get from phase1 results
+  let dirs = contentDirs;
+  if (dirs.length === 0) {
+    const phase1File = path.join(outputDir, 'phase1-suggestions.json');
+    if (fs.existsSync(phase1File)) {
+      const phase1 = JSON.parse(fs.readFileSync(phase1File, 'utf-8'));
+      dirs = phase1.contentDirs || [];
+    }
+  }
+
+  if (dirs.length === 0) {
+    console.error('Error: No content directories specified');
+    console.log('Usage: ownwords assign-tags <dir1> [dir2] [options]');
+    console.log('Or ensure phase1-suggestions.json contains contentDirs');
+    process.exit(1);
+  }
+
+  console.log('Phase 3: Tag Assignment');
+  console.log('=======================');
+  console.log(`Taxonomy: ${taxonomyFile}`);
+  console.log(`Content directories: ${dirs.length}`);
+  console.log(`Resume from previous: ${resume}`);
+  console.log('');
+
+  try {
+    const analyzer = new TagAnalyzer({
+      contentDirs: dirs,
+      outputDir,
+      verbose: options.verbose
+    });
+
+    const results = await analyzer.assignTags({
+      taxonomyFile,
+      delayMs,
+      resume
+    });
+
+    console.log('\n✅ Phase 3 Complete');
+    console.log(`   Articles processed: ${results.totalArticles}`);
+    console.log(`   Modified: ${results.modifiedCount}`);
+    console.log(`   Unchanged: ${results.unchangedCount}`);
+    console.log(`   Output: ${outputDir}/phase3-assignments.json`);
+    console.log('\nReview the assignments, then apply to files:');
+    console.log('  ownwords apply-tags --output-dir=' + outputDir);
+
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+function cmdApplyTags(options) {
+  const outputDir = options.flags.outputdir || './tag-analysis';
+  const dryRun = options.flags.dryrun === true;
+  const assignmentsFile = options.positional[0] ||
+    path.join(outputDir, 'phase3-assignments.json');
+
+  if (!fs.existsSync(assignmentsFile)) {
+    console.error(`Error: Assignments file not found: ${assignmentsFile}`);
+    console.log('Run assign-tags first to generate tag assignments.');
+    process.exit(1);
+  }
+
+  console.log('Apply Tag Assignments');
+  console.log('====================');
+  console.log(`Input: ${assignmentsFile}`);
+  console.log(`Dry run: ${dryRun}`);
+  console.log('');
+
+  try {
+    const analyzer = new TagAnalyzer({
+      contentDirs: [],
+      outputDir,
+      verbose: options.verbose
+    });
+
+    const results = analyzer.applyToFiles({
+      assignmentsFile,
+      dryRun
+    });
+
+    if (dryRun) {
+      console.log('\n📋 Dry run complete - no files were modified');
+      console.log('Run without --dryrun to apply changes');
+    } else {
+      console.log('\n✅ Tags applied to files');
+      console.log(`   Modified: ${results.modified}`);
+      console.log(`   Errors: ${results.errors}`);
+      console.log('\nTo push to WordPress:');
+      console.log('  ownwords update-metadata-all <content-dir> --tags-only');
+    }
+
+  } catch (error) {
+    console.error(`\n❌ Error: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// ============================================================================
 // MAIN
 // ============================================================================
 
@@ -1614,6 +1954,21 @@ async function main() {
       break;
     case 'update-metadata-all':
       await cmdUpdateMetadataAll(options);
+      break;
+    case 'config-claude':
+      await cmdConfigClaude(options);
+      break;
+    case 'analyze-tags':
+      await cmdAnalyzeTags(options);
+      break;
+    case 'synthesize-taxonomy':
+      await cmdSynthesizeTaxonomy(options);
+      break;
+    case 'assign-tags':
+      await cmdAssignTags(options);
+      break;
+    case 'apply-tags':
+      cmdApplyTags(options);
       break;
     default:
       console.error(`Unknown command: ${options.command}`);
