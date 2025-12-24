@@ -375,7 +375,7 @@ You need a WordPress Application Password (not your regular login password) to u
 
 **Security notes:**
 
-- Credentials are stored in `~/.ownwords/config.json` with `600` permissions (owner read/write only)
+- Credentials are stored in `~/.config/ownwords/config.json` with `600` permissions (owner read/write only)
 - Application passwords can be revoked anytime without affecting your main password
 - Never commit credentials to version control
 

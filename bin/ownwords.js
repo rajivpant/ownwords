@@ -104,7 +104,7 @@ Commands:
   analyze-tags <dirs...>         AI-powered tag analysis (Phase 1)
   synthesize-taxonomy            Create unified taxonomy from analysis (Phase 2)
   assign-tags                    Assign tags from taxonomy to articles (Phase 3)
-  apply-tags                     Apply tag assignments to local files
+  apply-tags [file]              Apply tag/category assignments to local files
 
 Options:
   --help, -h                     Show this help message
@@ -1861,7 +1861,17 @@ function cmdApplyTags(options) {
 
   if (!fs.existsSync(assignmentsFile)) {
     console.error(`Error: Assignments file not found: ${assignmentsFile}`);
-    console.log('Run assign-tags first to generate tag assignments.');
+    console.log('');
+    console.log('Usage: ownwords apply-tags [assignments.json] [options]');
+    console.log('');
+    console.log('Supported formats:');
+    console.log('  1. Phase 3 format: { assignments: [{ indexPath, assignedTags, ... }] }');
+    console.log('  2. Simple format: [{ path, finalTags, category }, ...]');
+    console.log('');
+    console.log('Options:');
+    console.log('  --dryrun         Preview changes without modifying files');
+    console.log('  --verbose        Show detailed output for each file');
+    console.log('  --output-dir     Directory for phase3-assignments.json (default: ./tag-analysis)');
     process.exit(1);
   }
 
@@ -1890,6 +1900,9 @@ function cmdApplyTags(options) {
       console.log('\n✅ Tags applied to files');
       console.log(`   Modified: ${results.modified}`);
       console.log(`   Errors: ${results.errors}`);
+      if (results.notFound > 0) {
+        console.log(`   Not found: ${results.notFound}`);
+      }
       console.log('\nTo push to WordPress:');
       console.log('  ownwords update-metadata-all <content-dir> --tags-only');
     }

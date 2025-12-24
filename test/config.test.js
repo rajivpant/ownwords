@@ -59,7 +59,7 @@ describe('config module', () => {
     it('returns a path in home directory', () => {
       const { getConfigPath } = require('../lib/config');
       const configPath = getConfigPath();
-      assert.ok(configPath.includes('.ownwords'));
+      assert.ok(configPath.includes('ownwords'));
       assert.ok(configPath.endsWith('config.json'));
     });
   });

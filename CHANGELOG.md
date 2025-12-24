@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
-- Credentials stored in `~/.ownwords/config.json` with `600` permissions
+- Credentials stored in `~/.config/ownwords/config.json` with `600` permissions
 - Environment variable support for CI/CD
 - HTTPS-only WordPress API communication
 
