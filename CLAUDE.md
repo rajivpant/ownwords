@@ -273,3 +273,7 @@ This is a standalone repository. If you're using ownwords alongside other site r
 ## Contributing
 
 This is open source software (MIT license). Contributions are welcome.
+
+## Skills
+
+For code review methodology, see the codebase-review and pr-review skills.
