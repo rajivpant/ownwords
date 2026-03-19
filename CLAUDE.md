@@ -276,4 +276,4 @@ This is open source software (MIT license). Contributions are welcome.
 
 ## Skills
 
-For code review methodology, see the codebase-review and pr-review skills.
+For code review methodology, see the synthesis-codebase-review and synthesis-pr-review skills.
