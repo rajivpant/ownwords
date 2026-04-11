@@ -26,3 +26,6 @@ coverage/
 # Environment files
 .env
 .env.local
+
+# Personal Claude Code context (managed via mac-sync)
+CLAUDE.local.md
