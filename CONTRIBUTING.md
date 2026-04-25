@@ -6,7 +6,7 @@ Thank you for your interest in contributing to ownwords!
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/rajivpant/ownwords.git
+   git clone https://github.com/synthesiswriting/ownwords.git
    cd ownwords
    ```
 
@@ -69,7 +69,7 @@ Thank you for your interest in contributing to ownwords!
 
 ## Reporting Issues
 
-Please use [GitHub Issues](https://github.com/rajivpant/ownwords/issues) to report bugs or request features.
+Please use [GitHub Issues](https://github.com/synthesiswriting/ownwords/issues) to report bugs or request features.
 
 When reporting bugs, please include:
 - Node.js version (`node --version`)

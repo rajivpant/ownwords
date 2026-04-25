@@ -28,12 +28,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rajivpant/ownwords.git"
+    "url": "git+https://github.com/synthesiswriting/ownwords.git"
   },
   "bugs": {
-    "url": "https://github.com/rajivpant/ownwords/issues"
+    "url": "https://github.com/synthesiswriting/ownwords/issues"
   },
-  "homepage": "https://github.com/rajivpant/ownwords#readme",
+  "homepage": "https://github.com/synthesiswriting/ownwords#readme",
   "engines": {
     "node": ">=18.0.0"
   },
