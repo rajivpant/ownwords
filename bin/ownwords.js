@@ -33,13 +33,13 @@ const {
   getConfigPath
 } = require('../lib/config');
 const { WpClient } = require('../lib/wp-api');
-const { fetchViaApi, fetchViaApiMultiple, generateDatePrefixedFilename, generateHierarchicalPath } = require('../lib/fetch-api');
+const { fetchViaApi, fetchViaApiMultiple, generateDatePrefixedFilename } = require('../lib/fetch-api');
 const {
   compareFiles,
   compareBatch,
   generateReport
 } = require('../lib/compare');
-const { TagAnalyzer, PRESERVED_TAGS } = require('../lib/tag-analyzer');
+const { TagAnalyzer } = require('../lib/tag-analyzer');
 const {
   ClaudeClient,
   checkClaudeConfig,
