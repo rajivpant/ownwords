@@ -1,4 +1,4 @@
-# Claude Code Context: ownwords
+# Repository Context: ownwords
 
 ## Repository: ownwords (PUBLIC, open source)
 
@@ -17,7 +17,9 @@ This is a **standalone npm package** published on npm. It can be used with any W
    ```bash
    find /path/to/target-site/content -name "*.md" | head -5
    ```
-3. **Read the target site's CLAUDE.md** if it exists — it will document that site's content structure
+3. **Read the target site's AGENTS.md** if it exists — it documents that
+   site's content structure (fall back to CLAUDE.md only when no AGENTS.md is
+   present)
 4. **Use the appropriate flags** based on what you learned (e.g., `--hierarchical` if the site uses hierarchical structure)
 
 ### Why ASK First?
@@ -233,7 +235,8 @@ ownwords/
 ├── package.json
 ├── README.md
 ├── LICENSE               # MIT
-└── CLAUDE.md             # This file
+├── AGENTS.md             # Canonical repository instructions
+└── CLAUDE.md             # Claude Code adapter that imports AGENTS.md
 ```
 
 ## Known Limitations
